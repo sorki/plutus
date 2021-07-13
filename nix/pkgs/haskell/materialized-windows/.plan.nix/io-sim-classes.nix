@@ -71,4 +71,15 @@
           };
         };
       };
-    } // rec { src = (pkgs.lib).mkDefault .././.source-repository-packages/14; }
+    } // {
+    src = (pkgs.lib).mkDefault (pkgs.fetchgit {
+      url = "6";
+      rev = "minimal";
+      sha256 = "";
+      }) // {
+      url = "6";
+      rev = "minimal";
+      sha256 = "";
+      };
+    postUnpack = "sourceRoot+=/io-sim-classes; echo source root reset to \$sourceRoot";
+    }
