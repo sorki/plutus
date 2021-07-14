@@ -32,7 +32,7 @@ import           Cardano.Wallet.Types
 import           Control.Concurrent                  (takeMVar)
 import           Control.Concurrent.Async            (Async, async, waitAny)
 import           Control.Concurrent.Availability     (Availability, starting)
-import           Control.Monad                       (void)
+import           Control.Monad                       (forM_, void)
 import           Control.Monad.Freer                 (Eff, Member, interpret)
 import           Control.Monad.Freer.Delay           (DelayEffect, delayThread)
 import           Control.Monad.Freer.Extras.Log      (logInfo)
@@ -53,7 +53,8 @@ import qualified Plutus.PAB.App                      as App
 import qualified Plutus.PAB.Core                     as Core
 import qualified Plutus.PAB.Db.Beam                  as Beam
 import qualified Plutus.PAB.Effects.Contract         as Contract
-import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler, HasDefinitions, SomeBuiltin (..), getResponse)
+import           Plutus.PAB.Effects.Contract.Builtin (Builtin, HasDefinitions, BuiltinHandler,
+                                                      ContractConstraints, SomeBuiltin (..), getResponse)
 import qualified Plutus.PAB.Monitoring.Monitoring    as LM
 import           Plutus.PAB.Run.Command
 import qualified Plutus.PAB.Run.PSGenerator          as PSGenerator
@@ -145,17 +146,15 @@ runConfigCommand contractHandler ConfigCommandArgs{ccaTrace, ccaPABConfig=config
         $ interpret (LM.handleLogMsgTrace ccaTrace)
         $ do
             cIds   <- Map.toList <$> Contract.getActiveContracts @(Builtin a)
-            states <- flip mapM cIds $ \(cid, args) ->
-              do
+            forM_ cIds $ \(cid, args) -> do
                 s <- Contract.getState @(Builtin a) cid
-                let SomeBuiltin cd = contractDefinition (caID args)
-                pure (s, cd)
-            let rs = map (\(st, cd) -> reconstructInternalState cd (getResponse st)) states
-            -- Note: instead of 'getResponse' could be
-            -- `Contract.serialisableState (Proxy @(Builtin a))`
+                let cd = contractDefinition @a (caID args)
+                startThread cd (getResponse s)
 
-            -- TODO: Now, spin up the contracts!
-            drainLog
+                -- Note: instead of 'getResponse' could be
+                -- `Contract.serialisableState (Proxy @(Builtin a))`
+
+                drainLog
 
     -- Start the server
     fmap (either (error . show) id)
@@ -252,12 +251,25 @@ toMockNodeServerLog = LM.convertLog $ LM.PABMsg . LM.SMockserverLogMsg
 drainLog :: Member DelayEffect effs => Eff effs ()
 drainLog = delayThread (1 :: Second)
 
-reconstructInternalState
-  :: forall w s e b. Monoid w
-  => Contract w s e b
+-- | Start a thread for the contract instance
+startThread ::
+    forall effs.
+    SomeBuiltin
+    -> ContractResponse Value Value Value PABReq
+    -> Eff effs ()
+startThread (SomeBuiltin b) r = do
+    let st = reconstructInternalState b r
+    -- TODO: Now, spin up the contracts!
+    pure ()
+
+reconstructInternalState ::
+    forall w schema error a.
+    ContractConstraints w schema error =>
+    Contract w schema error a
   -> ContractResponse Value Value Value PABReq
-  -> Maybe (Emulator.ContractInstanceStateInternal w s e b)
-reconstructInternalState contract r = foldl' f (Just s0) (responses record)
+  -> Maybe (Emulator.ContractInstanceStateInternal w schema error a)
+reconstructInternalState contract r =
+    foldl' f (Just s0) (responses record)
   where
     f mstate t =
       mstate >>= \state ->
@@ -268,5 +280,5 @@ reconstructInternalState contract r = foldl' f (Just s0) (responses record)
             Success response -> Emulator.addEventInstanceState response state
 
     State.ContractResponse{State.newState=State{record}} = r
-    s0 :: Emulator.ContractInstanceStateInternal w s e b
+    s0 :: Emulator.ContractInstanceStateInternal w schema error a
     s0 = Emulator.emptyInstanceState contract
