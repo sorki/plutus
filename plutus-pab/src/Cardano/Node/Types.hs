@@ -40,11 +40,6 @@ module Cardano.Node.Types
     , BlockReaperConfig (..)
     , MockServerMode (..)
 
-    -- ** Slot / timing
-    , SlotConfig(..)
-    , slotNumber
-    , currentSlot
-
     -- * newtype wrappers
     , NodeUrl (..)
     )
@@ -58,7 +53,7 @@ import qualified Data.Map                       as Map
 import           Data.Text.Prettyprint.Doc      (Pretty (..), pretty, viaShow, (<+>))
 import           Data.Time.Clock                (UTCTime)
 import qualified Data.Time.Format.ISO8601       as F
-import           Data.Time.Units                (Second)
+import           Data.Time.Units                (Millisecond, Second)
 import           Data.Time.Units.Extra          ()
 import           GHC.Generics                   (Generic)
 import           Ledger                         (Tx, txId)
@@ -68,10 +63,10 @@ import           Cardano.BM.Data.Tracer         (ToObject (..))
 import           Cardano.BM.Data.Tracer.Extras  (Tagged (..), mkObjectStr)
 import           Cardano.Chain                  (MockNodeServerChainState, fromEmulatorChainState)
 import qualified Cardano.Protocol.Socket.Client as Client
-import           Cardano.Protocol.Socket.Type   (SlotConfig (..), currentSlot, slotNumber)
 import           Control.Monad.Freer.Extras.Log (LogMessage, LogMsg (..))
 import           Control.Monad.Freer.Reader     (Reader)
 import           Control.Monad.Freer.State      (State)
+import           Ledger.TimeSlot                (SlotConfig)
 import qualified Plutus.Contract.Trace          as Trace
 import           Wallet.Emulator                (Wallet)
 import qualified Wallet.Emulator                as EM
@@ -145,7 +140,7 @@ data BlockReaperConfig =
 -- | Top-level logging data type for structural logging
 -- inside the Mock Node server.
 data MockServerLogMsg =
-    StartingSlotCoordination UTCTime Second
+    StartingSlotCoordination UTCTime Millisecond
     | NoRandomTxGeneration
     | StartingRandomTx
     | KeepingOldBlocks

@@ -6,14 +6,21 @@
 {-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeApplications   #-}
 {-# LANGUAGE TypeFamilies       #-}
-module Spec.Auction(tests, auctionTrace1, auctionTrace2,
-                    prop_Auction, prop_FinishAuction) where
+module Spec.Auction
+    ( tests
+    , auctionEmulatorCfg
+    , auctionTrace1
+    , auctionTrace2
+    , prop_Auction
+    , prop_FinishAuction
+    ) where
 
 import           Control.Lens
 import           Control.Monad                      (void, when)
 import qualified Control.Monad.Freer                as Freer
 import qualified Control.Monad.Freer.Error          as Freer
 import           Control.Monad.Freer.Extras.Log     (LogLevel (..))
+import           Data.Default                       (Default (def))
 import           Data.Monoid                        (Last (..))
 
 import           Ledger                             (Ada, Slot (..), Value, pubKeyHash)
@@ -25,11 +32,9 @@ import qualified Wallet.Emulator.Folds              as Folds
 import qualified Wallet.Emulator.Stream             as Stream
 
 import qualified Ledger.TimeSlot                    as TimeSlot
-import           Ledger.Value                       (AssetClass)
 import qualified Ledger.Value                       as Value
 import           Plutus.Contract.Test.ContractModel
 import           Plutus.Contracts.Auction           hiding (Bid)
-import qualified Plutus.Contracts.Currency          as Currency
 import qualified Plutus.Trace.Emulator              as Trace
 import           PlutusTx.Monoid                    (inv)
 
@@ -40,9 +45,9 @@ import           Test.Tasty.QuickCheck              (testProperty)
 params :: AuctionParams
 params =
     AuctionParams
-        { apOwner   = pubKeyHash $ walletPubKey (Wallet 1)
+        { apOwner   = pubKeyHash $ walletPubKey w1
         , apAsset   = theToken
-        , apEndTime = TimeSlot.slotToPOSIXTime 100
+        , apEndTime = TimeSlot.slotToEndPOSIXTime def 100
         }
 
 -- | The token that we are auctioning off.
@@ -53,16 +58,20 @@ theToken =
     -- This currency is created by the initial transaction.
     Value.singleton "ffff" "token" 1
 
--- | 'CheckOptions' that inclues 'theToken' in the initial distribution of wallet 1.
+-- | 'EmulatorConfig' that includes 'theToken' in the initial distribution of Wallet 1.
+auctionEmulatorCfg :: Trace.EmulatorConfig
+auctionEmulatorCfg =
+    let initialDistribution = defaultDist & over (ix w1) ((<>) theToken)
+    in def & Trace.initialChainState .~ Left initialDistribution
+
+-- | 'CheckOptions' that includes our own 'auctionEmulatorCfg'.
 options :: CheckOptions
-options =
-    let initialDistribution = defaultDist & over (at (Wallet 1) . _Just) ((<>) theToken)
-    in defaultCheckOptions & emulatorConfig . Trace.initialChainState .~ Left initialDistribution
+options = set emulatorConfig auctionEmulatorCfg defaultCheckOptions
 
 seller :: Contract AuctionOutput SellerSchema AuctionError ()
 seller = auctionSeller (apAsset params) (apEndTime params)
 
-buyer :: AssetClass -> Contract AuctionOutput BuyerSchema AuctionError ()
+buyer :: ThreadToken -> Contract AuctionOutput BuyerSchema AuctionError ()
 buyer cur = auctionBuyer cur params
 
 w1, w2, w3 :: Wallet
@@ -84,10 +93,11 @@ auctionTrace1 = do
     void $ Trace.waitUntilTime $ apEndTime params
     void $ Trace.waitNSlots 2
 
+
 trace2WinningBid :: Ada
 trace2WinningBid = 70
 
-extractAssetClass :: Trace.ContractHandle AuctionOutput SellerSchema AuctionError -> Trace.EmulatorTrace AssetClass
+extractAssetClass :: Trace.ContractHandle AuctionOutput SellerSchema AuctionError -> Trace.EmulatorTrace ThreadToken
 extractAssetClass handle = do
     t <- auctionThreadToken <$> Trace.observableState handle
     case t of
@@ -107,7 +117,8 @@ auctionTrace2 = do
     Trace.callEndpoint @"bid" hdl3 60
     _ <- Trace.waitNSlots 35
     Trace.callEndpoint @"bid" hdl2 trace2WinningBid
-    void $ Trace.waitUntilSlot (succ $ succ $ TimeSlot.posixTimeToSlot $ apEndTime params)
+    void $ Trace.waitUntilTime $ apEndTime params
+    void $ Trace.waitNSlots 2
 
 trace1FinalState :: AuctionOutput
 trace1FinalState =
@@ -129,9 +140,9 @@ trace2FinalState =
         , auctionThreadToken = Last $ Just threadToken
         }
 
-threadToken :: AssetClass
+threadToken :: ThreadToken
 threadToken =
-    let con = Currency.createThreadToken @EmptySchema @()
+    let con = getThreadToken :: Contract AuctionOutput SellerSchema AuctionError ThreadToken
         fld = Folds.instanceOutcome con (Trace.walletInstanceTag w1)
         getOutcome (Folds.Done a) = a
         getOutcome e              = error $ "not finished: " <> show e
@@ -174,7 +185,7 @@ instance ContractModel AuctionModel where
 
     initialState = AuctionModel { _currentBid = 0
                                 , _winner     = w1
-                                , _endSlot    = TimeSlot.posixTimeToSlot $ apEndTime params
+                                , _endSlot    = TimeSlot.posixTimeToEnclosingSlot def $ apEndTime params
                                 , _phase      = NotStarted }
 
     arbitraryAction s
@@ -264,7 +275,7 @@ tests =
             (assertDone seller (Trace.walletInstanceTag w1) (const True) "seller should be done"
             .&&. assertDone (buyer threadToken) (Trace.walletInstanceTag w2) (const True) "buyer should be done"
             .&&. assertAccumState (buyer threadToken) (Trace.walletInstanceTag w2) ((==) trace1FinalState ) "final state should be OK"
-            .&&. walletFundsChange w1 (Ada.toValue trace1WinningBid <> inv theToken <> Value.assetClassValue threadToken 1)
+            .&&. walletFundsChange w1 (Ada.toValue trace1WinningBid <> inv theToken)
             .&&. walletFundsChange w2 (inv (Ada.toValue trace1WinningBid) <> theToken))
             auctionTrace1
         , checkPredicateOptions options "run an auction with multiple bids"
@@ -272,7 +283,7 @@ tests =
             .&&. assertDone (buyer threadToken) (Trace.walletInstanceTag w2) (const True) "buyer should be done"
             .&&. assertDone (buyer threadToken) (Trace.walletInstanceTag w3) (const True) "3rd party should be done"
             .&&. assertAccumState (buyer threadToken) (Trace.walletInstanceTag w2) ((==) trace2FinalState) "final state should be OK"
-            .&&. walletFundsChange w1 (Ada.toValue trace2WinningBid <> inv theToken <> Value.assetClassValue threadToken 1)
+            .&&. walletFundsChange w1 (Ada.toValue trace2WinningBid <> inv theToken)
             .&&. walletFundsChange w2 (inv (Ada.toValue trace2WinningBid) <> theToken)
             .&&. walletFundsChange w3 mempty)
             auctionTrace2

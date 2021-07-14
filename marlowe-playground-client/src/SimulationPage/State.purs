@@ -1,6 +1,5 @@
 module SimulationPage.State
   ( handleAction
-  , editorSetTheme
   , editorGetValue
   , getCurrentContract
   , mkState
@@ -38,7 +37,7 @@ import Foreign.Generic (ForeignError, decode)
 import Foreign.JSON (parseJSON)
 import Halogen (HalogenM, get, query, tell)
 import Halogen.Extra (mapSubmodule)
-import Halogen.Monaco (Query(..)) as Monaco
+import Halogen.Monaco (Message(..), Query(..)) as Monaco
 import Help (HelpContext(..))
 import MainFrame.Types (ChildSlots, _simulatorEditorSlot)
 import Marlowe as Server
@@ -88,10 +87,12 @@ handleAction ::
   MonadAsk Env m =>
   Action ->
   HalogenM State Action ChildSlots Void m Unit
-handleAction Init = do
-  editorSetTheme
+handleAction (HandleEditorMessage Monaco.EditorReady) = do
   contents <- fromMaybe "" <$> (liftEffect $ SessionStorage.getItem simulatorBufferLocalStorageKey)
   handleAction $ LoadContract contents
+  editorSetTheme
+
+handleAction (HandleEditorMessage (Monaco.TextChanged _)) = pure unit
 
 handleAction (SetInitialSlot initialSlot) = do
   assign (_currentMarloweState <<< _executionState <<< _SimulationNotStarted <<< _initialSlot) initialSlot
@@ -286,13 +287,16 @@ updateOracleAndContractEditor ::
 updateOracleAndContractEditor = do
   mContract <- peruse _currentContract
   -- Update the decorations around the current part of the running contract
+  oldDecorationIds <- use _decorationIds
   case getLocation <$> mContract of
     Just (Range r) -> do
       let
         decorationOptions = { isWholeLine: false, className: "monaco-simulation-text-decoration", linesDecorationsClassName: "monaco-simulation-line-decoration" }
-      oldDecorationIds <- use _decorationIds
       mNewDecorationIds <- query _simulatorEditorSlot unit $ Monaco.SetDeltaDecorations oldDecorationIds [ { range: r, options: decorationOptions } ] identity
       for_ mNewDecorationIds (assign _decorationIds)
       void $ query _simulatorEditorSlot unit $ tell $ Monaco.RevealRange r
-    _ -> pure unit
+    _ -> do
+      void $ query _simulatorEditorSlot unit $ Monaco.SetDeltaDecorations oldDecorationIds [] identity
+      assign _decorationIds []
+      void $ query _simulatorEditorSlot unit $ tell $ Monaco.SetPosition { column: 1, lineNumber: 1 }
   setOraclePrice

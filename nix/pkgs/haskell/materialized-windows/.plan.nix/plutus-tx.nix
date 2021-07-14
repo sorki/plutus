@@ -65,6 +65,7 @@
           "PlutusTx/IsData"
           "PlutusTx/IsData/Class"
           "PlutusTx/Eq"
+          "PlutusTx/Enum"
           "PlutusTx/Either"
           "PlutusTx/Foldable"
           "PlutusTx/Functor"
@@ -81,7 +82,6 @@
           "PlutusTx/AssocMap"
           "PlutusTx/These"
           "PlutusTx/Code"
-          "PlutusTx/Data"
           "PlutusTx/Lift"
           "PlutusTx/Lift/Class"
           "PlutusTx/Builtins"
@@ -95,6 +95,7 @@
         "plutus-tx-test" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
             (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
             (hsPkgs."hedgehog" or (errorHandler.buildDepError "hedgehog"))
             (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))

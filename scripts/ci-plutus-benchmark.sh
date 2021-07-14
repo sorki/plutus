@@ -30,21 +30,26 @@ if [ -z "$PR_NUMBER" ] ; then
    exit 1
 fi
 echo "[ci-plutus-benchmark]: Processing benchmark comparison for PR $PR_NUMBER"
+PR_BRANCH_REF=$(git show-ref -s HEAD)
 
 echo "[ci-plutus-benchmark]: Updating cabal database ..."
 cabal update
 
 echo "[ci-plutus-benchmark]: Running benchmark for PR branch ..."
-cabal bench plutus-benchmark:validation >bench-PR.log 2>&1
+nix-shell --run "cabal bench plutus-benchmark:validation >bench-PR.log 2>&1"
 
 echo "[ci-plutus-benchmark]: Switching branches ..."
 git checkout "$(git merge-base HEAD master)"
+BASE_BRANCH_REF=$(git show-ref -s HEAD)
 
 echo "[ci-plutus-benchmark]: Running benchmark for base branch ..."
-cabal bench plutus-benchmark:validation >bench-base.log 2>&1
+nix-shell --run "cabal bench plutus-benchmark:validation >bench-base.log 2>&1"
+
+git checkout "$PR_BRANCH_REF"  # .. so we use the most recent version of the comparison script
 
 echo "[ci-plutus-benchmark]: Comparing results ..."
-./plutus-benchmark/bench-compare bench-base.log bench-PR.log >bench-compare-result.log
+echo -e "Comparing benchmark results of '$BASE_BRANCH_REF' (base) and '$PR_BRANCH_REF' (PR)\n" >bench-compare-result.log
+./plutus-benchmark/bench-compare-markdown bench-base.log bench-PR.log "${BASE_BRANCH_REF:0:7}" "${PR_BRANCH_REF:0:7}" >>bench-compare-result.log
 nix-shell -p jq --run "jq -Rs '.' bench-compare-result.log >bench-compare.json"
 
 echo "[ci-plutus-benchmark]: Posting results to GitHub ..."

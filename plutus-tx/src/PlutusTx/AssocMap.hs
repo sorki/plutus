@@ -48,7 +48,7 @@ import qualified PlutusTx.Prelude as P
 import           PlutusTx.These
 import qualified Prelude          as Haskell
 
-{-HLINT ignore "Use newtype instead of data"-}
+{- HLINT ignore "Use newtype instead of data" -}
 
 -- | A 'Map' of key-value pairs.
 newtype Map k v = Map { unMap :: [(k, v)] }

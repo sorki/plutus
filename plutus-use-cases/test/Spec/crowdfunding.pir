@@ -11,10 +11,19 @@
     )
     (datatypebind
       (datatype
+        (tyvardecl Credential (type))
+
+        Credential_match
+        (vardecl PubKeyCredential (fun (con bytestring) Credential))
+        (vardecl ScriptCredential (fun (con bytestring) Credential))
+      )
+    )
+    (datatypebind
+      (datatype
         (tyvardecl StakingCredential (type))
 
         StakingCredential_match
-        (vardecl StakingHash (fun (con bytestring) StakingCredential))
+        (vardecl StakingHash (fun Credential StakingCredential))
         (vardecl
           StakingPtr
           (fun (con integer) (fun (con integer) (fun (con integer) StakingCredential)))
@@ -97,20 +106,20 @@
           (nonrec)
           (datatypebind
             (datatype
+              (tyvardecl Bool (type))
+
+              Bool_match
+              (vardecl True Bool) (vardecl False Bool)
+            )
+          )
+          (datatypebind
+            (datatype
               (tyvardecl Extended (fun (type) (type)))
               (tyvardecl a (type))
               Extended_match
               (vardecl Finite (fun a [Extended a]))
               (vardecl NegInf [Extended a])
               (vardecl PosInf [Extended a])
-            )
-          )
-          (datatypebind
-            (datatype
-              (tyvardecl Bool (type))
-
-              Bool_match
-              (vardecl True Bool) (vardecl False Bool)
             )
           )
           (datatypebind
@@ -137,15 +146,6 @@
               (vardecl
                 Interval (fun [LowerBound a] (fun [UpperBound a] [Interval a]))
               )
-            )
-          )
-          (datatypebind
-            (datatype
-              (tyvardecl Credential (type))
-
-              Credential_match
-              (vardecl PubKeyCredential (fun (con bytestring) Credential))
-              (vardecl ScriptCredential (fun (con bytestring) Credential))
             )
           )
           (datatypebind
@@ -206,48 +206,70 @@
               )
             )
           )
-          (termbind
-            (strict)
-            (vardecl equalsInteger (fun (con integer) (fun (con integer) Bool)))
-            (lam
-              arg
-              (con integer)
-              (lam
-                arg
-                (con integer)
-                (let
-                  (nonrec)
-                  (termbind
-                    (strict)
-                    (vardecl b (con bool))
-                    [ [ (builtin equalsInteger) arg ] arg ]
-                  )
-                  [ [ [ { (builtin ifThenElse) Bool } b ] True ] False ]
-                )
+          (datatypebind
+            (datatype
+              (tyvardecl Campaign (type))
+
+              Campaign_match
+              (vardecl
+                Campaign
+                (fun (con integer) (fun (con integer) (fun (con bytestring) Campaign)))
               )
             )
           )
           (termbind
             (strict)
-            (vardecl
-              lessThanEqInteger (fun (con integer) (fun (con integer) Bool))
-            )
+            (vardecl collectionRange (fun Campaign [Interval (con integer)]))
             (lam
-              arg
-              (con integer)
-              (lam
-                arg
-                (con integer)
-                (let
-                  (nonrec)
-                  (termbind
-                    (strict)
-                    (vardecl b (con bool))
-                    [ [ (builtin lessThanEqualsInteger) arg ] arg ]
-                  )
-                  [ [ [ { (builtin ifThenElse) Bool } b ] True ] False ]
-                )
-              )
+              cmp
+              Campaign
+              [
+                [
+                  { Interval (con integer) }
+                  [
+                    [
+                      { LowerBound (con integer) }
+                      [
+                        { Finite (con integer) }
+                        [
+                          [
+                            (builtin addInteger)
+                            [
+                              { [ Campaign_match cmp ] (con integer) }
+                              (lam
+                                ds
+                                (con integer)
+                                (lam
+                                  ds (con integer) (lam ds (con bytestring) ds)
+                                )
+                              )
+                            ]
+                          ]
+                          (con integer 1)
+                        ]
+                      ]
+                    ]
+                    True
+                  ]
+                ]
+                [
+                  [
+                    { UpperBound (con integer) }
+                    [
+                      { Finite (con integer) }
+                      [
+                        { [ Campaign_match cmp ] (con integer) }
+                        (lam
+                          ds
+                          (con integer)
+                          (lam ds (con integer) (lam ds (con bytestring) ds))
+                        )
+                      ]
+                    ]
+                  ]
+                  True
+                ]
+              ]
             )
           )
           (datatypebind
@@ -276,7 +298,19 @@
                   [
                     [
                       {
-                        [ Bool_match [ [ equalsInteger x ] y ] ]
+                        [
+                          Bool_match
+                          [
+                            [
+                              [
+                                { (builtin ifThenElse) Bool }
+                                [ [ (builtin equalsInteger) x ] y ]
+                              ]
+                              True
+                            ]
+                            False
+                          ]
+                        ]
                         (fun Unit Ordering)
                       }
                       (lam thunk Unit EQ)
@@ -288,7 +322,21 @@
                         [
                           [
                             {
-                              [ Bool_match [ [ lessThanEqInteger x ] y ] ]
+                              [
+                                Bool_match
+                                [
+                                  [
+                                    [
+                                      { (builtin ifThenElse) Bool }
+                                      [
+                                        [ (builtin lessThanEqualsInteger) x ] y
+                                      ]
+                                    ]
+                                    True
+                                  ]
+                                  False
+                                ]
+                              ]
                               (fun Unit Ordering)
                             }
                             (lam thunk Unit LT)
@@ -320,7 +368,19 @@
                   [
                     [
                       {
-                        [ Bool_match [ [ lessThanEqInteger x ] y ] ]
+                        [
+                          Bool_match
+                          [
+                            [
+                              [
+                                { (builtin ifThenElse) Bool }
+                                [ [ (builtin lessThanEqualsInteger) x ] y ]
+                              ]
+                              True
+                            ]
+                            False
+                          ]
+                        ]
                         (fun Unit (con integer))
                       }
                       (lam thunk Unit y)
@@ -348,7 +408,19 @@
                   [
                     [
                       {
-                        [ Bool_match [ [ lessThanEqInteger x ] y ] ]
+                        [
+                          Bool_match
+                          [
+                            [
+                              [
+                                { (builtin ifThenElse) Bool }
+                                [ [ (builtin lessThanEqualsInteger) x ] y ]
+                              ]
+                              True
+                            ]
+                            False
+                          ]
+                        ]
                         (fun Unit (con integer))
                       }
                       (lam thunk Unit x)
@@ -362,24 +434,47 @@
           )
           (termbind
             (strict)
+            (vardecl equalsInteger (fun (con integer) (fun (con integer) Bool)))
+            (lam
+              x
+              (con integer)
+              (lam
+                y
+                (con integer)
+                [
+                  [
+                    [
+                      { (builtin ifThenElse) Bool }
+                      [ [ (builtin equalsInteger) x ] y ]
+                    ]
+                    True
+                  ]
+                  False
+                ]
+              )
+            )
+          )
+          (termbind
+            (strict)
             (vardecl
               greaterThanEqInteger (fun (con integer) (fun (con integer) Bool))
             )
             (lam
-              arg
+              x
               (con integer)
               (lam
-                arg
+                y
                 (con integer)
-                (let
-                  (nonrec)
-                  (termbind
-                    (strict)
-                    (vardecl b (con bool))
-                    [ [ (builtin greaterThanEqualsInteger) arg ] arg ]
-                  )
-                  [ [ [ { (builtin ifThenElse) Bool } b ] True ] False ]
-                )
+                [
+                  [
+                    [
+                      { (builtin ifThenElse) Bool }
+                      [ [ (builtin greaterThanEqualsInteger) x ] y ]
+                    ]
+                    True
+                  ]
+                  False
+                ]
               )
             )
           )
@@ -389,20 +484,45 @@
               greaterThanInteger (fun (con integer) (fun (con integer) Bool))
             )
             (lam
-              arg
+              x
               (con integer)
               (lam
-                arg
+                y
                 (con integer)
-                (let
-                  (nonrec)
-                  (termbind
-                    (strict)
-                    (vardecl b (con bool))
-                    [ [ (builtin greaterThanInteger) arg ] arg ]
-                  )
-                  [ [ [ { (builtin ifThenElse) Bool } b ] True ] False ]
-                )
+                [
+                  [
+                    [
+                      { (builtin ifThenElse) Bool }
+                      [ [ (builtin greaterThanInteger) x ] y ]
+                    ]
+                    True
+                  ]
+                  False
+                ]
+              )
+            )
+          )
+          (termbind
+            (strict)
+            (vardecl
+              lessThanEqInteger (fun (con integer) (fun (con integer) Bool))
+            )
+            (lam
+              x
+              (con integer)
+              (lam
+                y
+                (con integer)
+                [
+                  [
+                    [
+                      { (builtin ifThenElse) Bool }
+                      [ [ (builtin lessThanEqualsInteger) x ] y ]
+                    ]
+                    True
+                  ]
+                  False
+                ]
               )
             )
           )
@@ -412,20 +532,21 @@
               lessThanInteger (fun (con integer) (fun (con integer) Bool))
             )
             (lam
-              arg
+              x
               (con integer)
               (lam
-                arg
+                y
                 (con integer)
-                (let
-                  (nonrec)
-                  (termbind
-                    (strict)
-                    (vardecl b (con bool))
-                    [ [ (builtin lessThanInteger) arg ] arg ]
-                  )
-                  [ [ [ { (builtin ifThenElse) Bool } b ] True ] False ]
-                )
+                [
+                  [
+                    [
+                      { (builtin ifThenElse) Bool }
+                      [ [ (builtin lessThanInteger) x ] y ]
+                    ]
+                    True
+                  ]
+                  False
+                ]
               )
             )
           )
@@ -465,17 +586,6 @@
               ]
               fOrdInteger_cmin
             ]
-          )
-          (datatypebind
-            (datatype
-              (tyvardecl Campaign (type))
-
-              Campaign_match
-              (vardecl
-                Campaign
-                (fun (con integer) (fun (con integer) (fun (con bytestring) Campaign)))
-              )
-            )
           )
           (termbind
             (strict)
@@ -2271,30 +2381,6 @@
               )
             )
           )
-          (termbind
-            (strict)
-            (vardecl
-              equalsByteString
-              (fun (con bytestring) (fun (con bytestring) Bool))
-            )
-            (lam
-              arg
-              (con bytestring)
-              (lam
-                arg
-                (con bytestring)
-                (let
-                  (nonrec)
-                  (termbind
-                    (strict)
-                    (vardecl b (con bool))
-                    [ [ (builtin equalsByteString) arg ] arg ]
-                  )
-                  [ [ [ { (builtin ifThenElse) Bool } b ] True ] False ]
-                )
-              )
-            )
-          )
           (datatypebind
             (datatype
               (tyvardecl Monoid (fun (type) (type)))
@@ -2509,93 +2595,105 @@
                                         (lam
                                           ds
                                           (con bytestring)
-                                          (let
-                                            (nonrec)
-                                            (termbind
-                                              (nonstrict)
-                                              (vardecl
-                                                p (fun (con bytestring) Bool)
-                                              )
-                                              [ equalsByteString k ]
-                                            )
+                                          [
                                             [
                                               [
-                                                [
-                                                  {
+                                                {
+                                                  [
+                                                    {
+                                                      Maybe_match
+                                                      (con bytestring)
+                                                    }
                                                     [
-                                                      {
-                                                        Maybe_match
-                                                        (con bytestring)
-                                                      }
                                                       [
                                                         [
-                                                          [
+                                                          {
                                                             {
-                                                              {
-                                                                fFoldableNil_cfoldMap
-                                                                [(lam a (type) [Maybe a]) (con bytestring)]
-                                                              }
-                                                              (con bytestring)
+                                                              fFoldableNil_cfoldMap
+                                                              [(lam a (type) [Maybe a]) (con bytestring)]
                                                             }
-                                                            {
-                                                              fMonoidFirst
-                                                              (con bytestring)
-                                                            }
-                                                          ]
-                                                          (lam
-                                                            x
                                                             (con bytestring)
+                                                          }
+                                                          {
+                                                            fMonoidFirst
+                                                            (con bytestring)
+                                                          }
+                                                        ]
+                                                        (lam
+                                                          x
+                                                          (con bytestring)
+                                                          [
                                                             [
                                                               [
-                                                                [
-                                                                  {
+                                                                {
+                                                                  [
+                                                                    Bool_match
                                                                     [
-                                                                      Bool_match
-                                                                      [ p x ]
+                                                                      [
+                                                                        [
+                                                                          {
+                                                                            (builtin
+                                                                              ifThenElse
+                                                                            )
+                                                                            Bool
+                                                                          }
+                                                                          [
+                                                                            [
+                                                                              (builtin
+                                                                                equalsByteString
+                                                                              )
+                                                                              k
+                                                                            ]
+                                                                            x
+                                                                          ]
+                                                                        ]
+                                                                        True
+                                                                      ]
+                                                                      False
                                                                     ]
-                                                                    (fun Unit [Maybe (con bytestring)])
-                                                                  }
-                                                                  (lam
-                                                                    thunk
-                                                                    Unit
-                                                                    [
-                                                                      {
-                                                                        Just
-                                                                        (con bytestring)
-                                                                      }
-                                                                      x
-                                                                    ]
-                                                                  )
-                                                                ]
+                                                                  ]
+                                                                  (fun Unit [Maybe (con bytestring)])
+                                                                }
                                                                 (lam
                                                                   thunk
                                                                   Unit
-                                                                  {
-                                                                    Nothing
-                                                                    (con bytestring)
-                                                                  }
+                                                                  [
+                                                                    {
+                                                                      Just
+                                                                      (con bytestring)
+                                                                    }
+                                                                    x
+                                                                  ]
                                                                 )
                                                               ]
-                                                              Unit
+                                                              (lam
+                                                                thunk
+                                                                Unit
+                                                                {
+                                                                  Nothing
+                                                                  (con bytestring)
+                                                                }
+                                                              )
                                                             ]
-                                                          )
-                                                        ]
-                                                        ds
+                                                            Unit
+                                                          ]
+                                                        )
                                                       ]
+                                                      ds
                                                     ]
-                                                    (fun Unit Bool)
-                                                  }
-                                                  (lam
-                                                    ds
-                                                    (con bytestring)
-                                                    (lam thunk Unit True)
-                                                  )
-                                                ]
-                                                (lam thunk Unit False)
+                                                  ]
+                                                  (fun Unit Bool)
+                                                }
+                                                (lam
+                                                  ds
+                                                  (con bytestring)
+                                                  (lam thunk Unit True)
+                                                )
                                               ]
-                                              Unit
+                                              (lam thunk Unit False)
                                             ]
-                                          )
+                                            Unit
+                                          ]
                                         )
                                       )
                                     )
@@ -2628,59 +2726,7 @@
                               [
                                 [
                                   [ { contains (con integer) } fOrdPOSIXTime ]
-                                  [
-                                    [
-                                      { Interval (con integer) }
-                                      [
-                                        [
-                                          { LowerBound (con integer) }
-                                          [
-                                            { Finite (con integer) }
-                                            [
-                                              {
-                                                [ Campaign_match campaign ]
-                                                (con integer)
-                                              }
-                                              (lam
-                                                ds
-                                                (con integer)
-                                                (lam
-                                                  ds
-                                                  (con integer)
-                                                  (lam ds (con bytestring) ds)
-                                                )
-                                              )
-                                            ]
-                                          ]
-                                        ]
-                                        True
-                                      ]
-                                    ]
-                                    [
-                                      [
-                                        { UpperBound (con integer) }
-                                        [
-                                          { Finite (con integer) }
-                                          [
-                                            {
-                                              [ Campaign_match campaign ]
-                                              (con integer)
-                                            }
-                                            (lam
-                                              ds
-                                              (con integer)
-                                              (lam
-                                                ds
-                                                (con integer)
-                                                (lam ds (con bytestring) ds)
-                                              )
-                                            )
-                                          ]
-                                        ]
-                                      ]
-                                      True
-                                    ]
-                                  ]
+                                  [ collectionRange campaign ]
                                 ]
                                 [
                                   {
@@ -2758,6 +2804,50 @@
               )
               (termbind
                 (strict)
+                (vardecl refundRange (fun Campaign [Interval (con integer)]))
+                (lam
+                  cmp
+                  Campaign
+                  [
+                    [
+                      { Interval (con integer) }
+                      [
+                        [
+                          { LowerBound (con integer) }
+                          [
+                            { Finite (con integer) }
+                            [
+                              [
+                                (builtin addInteger)
+                                [
+                                  { [ Campaign_match cmp ] (con integer) }
+                                  (lam
+                                    ds
+                                    (con integer)
+                                    (lam
+                                      ds
+                                      (con integer)
+                                      (lam ds (con bytestring) ds)
+                                    )
+                                  )
+                                ]
+                              ]
+                              (con integer 1)
+                            ]
+                          ]
+                        ]
+                        True
+                      ]
+                    ]
+                    [
+                      [ { UpperBound (con integer) } { PosInf (con integer) } ]
+                      True
+                    ]
+                  ]
+                )
+              )
+              (termbind
+                (strict)
                 (vardecl
                   validRefund
                   (fun Campaign (fun (con bytestring) (fun TxInfo Bool)))
@@ -2780,42 +2870,7 @@
                                 [
                                   [
                                     [ { contains (con integer) } fOrdPOSIXTime ]
-                                    [
-                                      [
-                                        { Interval (con integer) }
-                                        [
-                                          [
-                                            { LowerBound (con integer) }
-                                            [
-                                              { Finite (con integer) }
-                                              [
-                                                {
-                                                  [ Campaign_match campaign ]
-                                                  (con integer)
-                                                }
-                                                (lam
-                                                  ds
-                                                  (con integer)
-                                                  (lam
-                                                    ds
-                                                    (con integer)
-                                                    (lam ds (con bytestring) ds)
-                                                  )
-                                                )
-                                              ]
-                                            ]
-                                          ]
-                                          True
-                                        ]
-                                      ]
-                                      [
-                                        [
-                                          { UpperBound (con integer) }
-                                          { PosInf (con integer) }
-                                        ]
-                                        True
-                                      ]
-                                    ]
+                                    [ refundRange campaign ]
                                   ]
                                   [
                                     {

@@ -125,10 +125,6 @@
           "PlutusCore/Default/Universe"
           "PlutusCore/Eq"
           "PlutusCore/Evaluation/Machine/ExBudgetingDefaults"
-          "PlutusCore/Examples/Data/InterList"
-          "PlutusCore/Examples/Data/Shad"
-          "PlutusCore/Examples/Data/TreeForest"
-          "PlutusCore/Examples/Data/Vec"
           "PlutusCore/Generators/Internal/Denotation"
           "PlutusCore/Generators/Internal/Dependent"
           "PlutusCore/Generators/Internal/Entity"
@@ -162,10 +158,8 @@
           "PlutusIR/Normalize"
           "PlutusIR/TypeCheck/Internal"
           "UntypedPlutusCore/Analysis/Definitions"
-          "UntypedPlutusCore/Check/Uniques"
           "UntypedPlutusCore/Core"
           "UntypedPlutusCore/Core/Instance"
-          "UntypedPlutusCore/Core/Instance/CBOR"
           "UntypedPlutusCore/Core/Instance/Eq"
           "UntypedPlutusCore/Core/Instance/Flat"
           "UntypedPlutusCore/Core/Instance/Pretty"
@@ -175,7 +169,6 @@
           "UntypedPlutusCore/Core/Instance/Pretty/Readable"
           "UntypedPlutusCore/Core/Instance/Recursive"
           "UntypedPlutusCore/Core/Plated"
-          "UntypedPlutusCore/Core/Type"
           "UntypedPlutusCore/Evaluation/Machine/Cek/CekMachineCosts"
           "UntypedPlutusCore/Evaluation/Machine/Cek/ExBudgetMode"
           "UntypedPlutusCore/Evaluation/Machine/Cek/Internal"
@@ -189,26 +182,33 @@
           "Data/Functor/Foldable/Monadic"
           "Universe/Core"
           "PlutusCore"
-          "PlutusCore/CBOR"
           "PlutusCore/Check/Normal"
           "PlutusCore/Check/Uniques"
           "PlutusCore/Check/Value"
           "PlutusCore/Constant"
           "PlutusCore/Constant/Dynamic/Emit"
           "PlutusCore/Core"
+          "PlutusCore/Data"
           "PlutusCore/DataFilePaths"
           "PlutusCore/DeBruijn"
           "PlutusCore/Default"
           "PlutusCore/Error"
-          "PlutusCore/Evaluation/Machine/Ck"
           "PlutusCore/Evaluation/Machine/BuiltinCostModel"
+          "PlutusCore/Evaluation/Machine/Ck"
           "PlutusCore/Evaluation/Machine/CostModelInterface"
           "PlutusCore/Evaluation/Machine/ExBudget"
-          "PlutusCore/Evaluation/Machine/Exception"
           "PlutusCore/Evaluation/Machine/ExMemory"
+          "PlutusCore/Evaluation/Machine/Exception"
           "PlutusCore/Evaluation/Machine/MachineParameters"
           "PlutusCore/Evaluation/Result"
           "PlutusCore/Examples/Builtins"
+          "PlutusCore/Examples/Data/Data"
+          "PlutusCore/Examples/Data/InterList"
+          "PlutusCore/Examples/Data/List"
+          "PlutusCore/Examples/Data/Pair"
+          "PlutusCore/Examples/Data/Shad"
+          "PlutusCore/Examples/Data/TreeForest"
+          "PlutusCore/Examples/Data/Vec"
           "PlutusCore/Examples/Everything"
           "PlutusCore/Flat"
           "PlutusCore/FsTree"
@@ -233,10 +233,13 @@
           "PlutusCore/Rename/Monad"
           "PlutusCore/StdLib/Data/Bool"
           "PlutusCore/StdLib/Data/ChurchNat"
+          "PlutusCore/StdLib/Data/Data"
           "PlutusCore/StdLib/Data/Function"
           "PlutusCore/StdLib/Data/Integer"
           "PlutusCore/StdLib/Data/List"
           "PlutusCore/StdLib/Data/Nat"
+          "PlutusCore/StdLib/Data/Pair"
+          "PlutusCore/StdLib/Data/ScottList"
           "PlutusCore/StdLib/Data/ScottUnit"
           "PlutusCore/StdLib/Data/Sum"
           "PlutusCore/StdLib/Data/Unit"
@@ -278,6 +281,8 @@
           "UntypedPlutusCore/Evaluation/Machine/Cek"
           "UntypedPlutusCore/Parser"
           "UntypedPlutusCore/Rename"
+          "UntypedPlutusCore/Check/Uniques"
+          "UntypedPlutusCore/Core/Type"
           "Common"
           "Crypto"
           "Data/ByteString/Hash"
@@ -320,16 +325,36 @@
             (hsPkgs."deepseq" or (errorHandler.buildDepError "deepseq"))
             (hsPkgs."flat" or (errorHandler.buildDepError "flat"))
             (hsPkgs."monoidal-containers" or (errorHandler.buildDepError "monoidal-containers"))
+            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
             (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
-            (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
+            ];
+          buildable = true;
+          modules = [ "Common" "Parsers" ];
+          hsSourceDirs = [ "executables" ];
+          mainPath = [ "plc/Main.hs" ];
+          };
+        "uplc" = {
+          depends = [
+            (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."deepseq" or (errorHandler.buildDepError "deepseq"))
+            (hsPkgs."flat" or (errorHandler.buildDepError "flat"))
+            (hsPkgs."monoidal-containers" or (errorHandler.buildDepError "monoidal-containers"))
+            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
+            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
             (hsPkgs."split" or (errorHandler.buildDepError "split"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
             ];
           buildable = true;
-          hsSourceDirs = [ "plc" ];
-          mainPath = [ "Main.hs" ];
+          modules = [ "Common" "Parsers" ];
+          hsSourceDirs = [ "executables" ];
+          mainPath = [ "uplc/Main.hs" ];
           };
         };
       tests = {
@@ -359,7 +384,6 @@
             (hsPkgs."mmorph" or (errorHandler.buildDepError "mmorph"))
             (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
             (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
-            (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
             (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))
             (hsPkgs."tasty-golden" or (errorHandler.buildDepError "tasty-golden"))
             (hsPkgs."tasty-hedgehog" or (errorHandler.buildDepError "tasty-hedgehog"))
@@ -475,7 +499,6 @@
             (hsPkgs."hedgehog" or (errorHandler.buildDepError "hedgehog"))
             (hsPkgs."inline-r" or (errorHandler.buildDepError "inline-r"))
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
-            (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."vector" or (errorHandler.buildDepError "vector"))
             ];
@@ -505,7 +528,6 @@
             (hsPkgs."inline-r" or (errorHandler.buildDepError "inline-r"))
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
             (hsPkgs."mmorph" or (errorHandler.buildDepError "mmorph"))
-            (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."vector" or (errorHandler.buildDepError "vector"))
             ];

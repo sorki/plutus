@@ -13,15 +13,16 @@ module Plutus.Trace.Effects.Waiting(
     , waitUntilTime
     , nextSlot
     , waitNSlots
-    , waitNSeconds
+    , waitNMilliSeconds
     , handleWaiting
     ) where
 
 import           Control.Monad.Freer           (Eff, Member, type (~>))
 import           Control.Monad.Freer.Coroutine (Yield)
 import           Control.Monad.Freer.TH        (makeEffect)
+import           Data.Default                  (Default (def))
 import           Ledger.Slot                   (Slot)
-import           Ledger.Time                   (DiffSeconds, POSIXTime, fromSeconds)
+import           Ledger.Time                   (DiffMilliSeconds, POSIXTime, fromMilliSeconds)
 import qualified Ledger.TimeSlot               as TimeSlot
 import           Numeric.Natural               (Natural)
 import           Plutus.Trace.Emulator.Types   (EmulatorMessage (NewSlot))
@@ -32,11 +33,12 @@ data Waiting r where
 
 makeEffect ''Waiting
 
--- | Wait until the specified time.
+-- | Wait until the slot where the given time falls into and return latest time
+-- we know has passed.
 waitUntilTime :: Member Waiting effs => POSIXTime -> Eff effs POSIXTime
 waitUntilTime time = do
-  slot <- waitUntilSlot (TimeSlot.posixTimeToSlot time)
-  return $ TimeSlot.slotToPOSIXTime slot
+  slot <- waitUntilSlot (TimeSlot.posixTimeToEnclosingSlot def time)
+  return $ TimeSlot.slotToEndPOSIXTime def slot
 
 -- | Wait until the beginning of the next slot, returning
 --   the new slot number.
@@ -53,16 +55,17 @@ waitNSlots n
     | n > 1 = nextSlot >> waitNSlots (n - 1)
     | otherwise = nextSlot
 
--- | Wait for a number of seconds
+-- | Convert the given 'n' milliseconds to a number of slots to wait.
 --
--- Note: Currently, if n < length of a slot, then 'waitNSeconds' has no effect.
-waitNSeconds ::
+-- Note: Currently, if n < length of a slot, then 'waitNMilliSeconds' has no
+-- effect.
+waitNMilliSeconds ::
     forall effs.
     ( Member Waiting effs )
-    => DiffSeconds
+    => DiffMilliSeconds
     -> Eff effs Slot
-waitNSeconds n =
-    waitNSlots (fromIntegral $ TimeSlot.posixTimeToSlot $ fromSeconds n)
+waitNMilliSeconds n =
+    waitNSlots (fromIntegral $ TimeSlot.posixTimeToEnclosingSlot def $ fromMilliSeconds n)
 
 handleWaiting ::
     forall effs effs2.

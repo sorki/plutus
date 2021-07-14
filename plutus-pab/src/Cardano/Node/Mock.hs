@@ -22,7 +22,7 @@ import qualified Control.Monad.Freer.Writer        as Eff
 import           Control.Monad.IO.Class            (MonadIO, liftIO)
 import           Data.Foldable                     (traverse_)
 import           Data.Function                     ((&))
-import           Data.Time.Units                   (Second, toMicroseconds)
+import           Data.Time.Units                   (Millisecond, Second, toMicroseconds)
 import           Data.Time.Units.Extra             ()
 import           Servant                           (NoContent (NoContent))
 
@@ -33,6 +33,7 @@ import           Cardano.Node.Types
 import qualified Cardano.Protocol.Socket.Client    as Client
 import qualified Cardano.Protocol.Socket.Server    as Server
 import           Ledger                            (Tx)
+import           Ledger.TimeSlot                   (SlotConfig (SlotConfig, scSlotLength), currentSlot)
 import           Ledger.Tx                         (outputs)
 import           Plutus.PAB.Arbitrary              ()
 import qualified Plutus.PAB.Monitoring.Monitoring  as LM
@@ -137,4 +138,6 @@ slotCoordinator sc@SlotConfig{scSlotLength} serverHandler = do
         void $ Server.processBlock serverHandler
         newSlot <- currentSlot sc
         void $ Server.modifySlot (const newSlot) serverHandler
-        liftIO $ threadDelay $ fromIntegral $ toMicroseconds scSlotLength
+        liftIO $ threadDelay
+               $ fromIntegral
+               $ toMicroseconds (fromInteger scSlotLength :: Millisecond)

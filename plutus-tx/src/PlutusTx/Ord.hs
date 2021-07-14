@@ -2,9 +2,10 @@
 module PlutusTx.Ord (Ord(..), Max (..), Min (..), Ordering(..)) where
 
 import qualified PlutusTx.Builtins  as Builtins
-import           PlutusTx.Data
 import           PlutusTx.Eq
 import           PlutusTx.Semigroup
+
+import           PlutusCore.Data
 
 import           Prelude            hiding (Eq (..), Ord (..), Semigroup (..))
 

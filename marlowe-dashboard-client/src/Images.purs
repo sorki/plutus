@@ -2,31 +2,31 @@ module Images
   ( marloweRunLogo
   , marloweRunNavLogo
   , marloweRunNavLogoDark
+  , backgroundShape
   , arrowBack
   , linkHighlight
+  , getStartedThumbnail
+  , cfdIcon
+  , loanIcon
+  , purchaseIcon
   ) where
 
-foreign import marloweRunLogo_ :: String
+foreign import marloweRunLogo :: String
 
-foreign import marloweRunNavLogo_ :: String
+foreign import marloweRunNavLogo :: String
 
-foreign import marloweRunNavLogoDark_ :: String
+foreign import marloweRunNavLogoDark :: String
 
-foreign import arrowBack_ :: String
+foreign import backgroundShape :: String
 
-foreign import linkHighlight_ :: String
+foreign import arrowBack :: String
 
-marloweRunLogo :: String
-marloweRunLogo = marloweRunLogo_
+foreign import linkHighlight :: String
 
-marloweRunNavLogo :: String
-marloweRunNavLogo = marloweRunNavLogo_
+foreign import getStartedThumbnail :: String
 
-marloweRunNavLogoDark :: String
-marloweRunNavLogoDark = marloweRunNavLogoDark_
+foreign import cfdIcon :: String
 
-arrowBack :: String
-arrowBack = arrowBack_
+foreign import loanIcon :: String
 
-linkHighlight :: String
-linkHighlight = linkHighlight_
+foreign import purchaseIcon :: String

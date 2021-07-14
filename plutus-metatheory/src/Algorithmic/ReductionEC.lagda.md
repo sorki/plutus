@@ -18,8 +18,6 @@ open import Data.List as List using (List; _∷_; []; _++_;reverse;length)
 open import Data.Bool using (Bool;true;false)
 open import Data.Nat using (zero;ℕ;_+_)
 open import Data.Unit using (tt)
-import Debug.Trace as Debug
-
 
 open import Type
 import Type.RenamingSubstitution as T
@@ -38,13 +36,51 @@ open import Builtin.Signature
 open import Utils
 open import Data.Maybe using (just;from-just)
 open import Data.String using (String)
+open import Relation.Binary.HeterogeneousEquality using (_≅_;≡-subst-removable;refl;≡-to-≅;≅-to-≡) renaming (sym to hsym; trans to htrans; cong to hcong)
 ```
 
 ## Pragmas
 
 ```
-{-# INJECTIVE _⊢Nf⋆_ #-}
 {-# INJECTIVE _⊢_ #-}
+{-# INJECTIVE _⊢Nf⋆_ #-}
+```
+
+## Some syntactic lemmas about injectivity
+
+```
+lem-·⋆' : ∀{K K'}{A : ∅ ⊢Nf⋆ K}{A' : ∅ ⊢Nf⋆ K'}{B : ∅ ,⋆ K ⊢Nf⋆ *}{B' : ∅ ,⋆ K' ⊢Nf⋆ *}
+  → ∀{M : ∅ ⊢ Π B}{M' : ∅ ⊢ Π B'}
+  → M' _⊢_.·⋆ A' ≅ M _⊢_.·⋆ A
+  → M' ≅ M × A ≅ A' × B ≅ B'
+lem-·⋆' refl = refl ,, refl ,, refl
+
+lem-·⋆ : ∀{K K'}{A : ∅ ⊢Nf⋆ K}{A' : ∅ ⊢Nf⋆ K'}{B B'}
+  → (o : K ≡ K')
+  → (p : substEq (∅ ⊢Nf⋆_) o A ≡ A')
+  → (q : Π B ≡ Π B')
+  → (r : B [ A ]Nf ≡ B' [ A' ]Nf)
+  → ∀{M}
+  → substEq (∅ ⊢_) q M ·⋆ A' ≡ substEq (∅ ⊢_) r (M ·⋆ A)
+lem-·⋆ refl refl refl refl = refl
+
+lem-·⋆wrap : ∀{K K'}{A : ∅ ⊢Nf⋆ K}{A'}{B : ∅ ,⋆ K ⊢Nf⋆ *}{B' : ∅ ⊢Nf⋆ K'}
+  → ∀{M : ∅ ⊢ Π B}{M' : ∅ ⊢ _}
+  → M _⊢_.·⋆ A ≅ _⊢_.wrap A' B' M'
+  → ⊥
+lem-·⋆wrap ()
+
+lem-·⋆unwrap : ∀{K K'}{A : ∅ ⊢Nf⋆ K}{A'}{B : ∅ ,⋆ K ⊢Nf⋆ *}{B' : ∅ ⊢Nf⋆ K'}
+  → ∀{M : ∅ ⊢ Π B}{M' : ∅ ⊢ μ A' B'}
+  → M _⊢_.·⋆ A ≅ _⊢_.unwrap M'
+  → ⊥
+lem-·⋆unwrap ()
+
+lem-unwrap : ∀{K K'}{A}{A'}{B : ∅ ⊢Nf⋆ K}{B' : ∅ ⊢Nf⋆ K'}
+  → ∀{M : ∅ ⊢ μ A B}{M' : ∅ ⊢ μ A' B'}
+  → _⊢_.unwrap M ≅ _⊢_.unwrap M'
+  → A ≅ A' × B ≅ B' × M ≅ M'
+lem-unwrap refl = refl ,, refl ,, refl 
 ```
 
 
@@ -118,7 +154,7 @@ bwd-length : ∀{A} → Bwd A → ℕ
 bwd-length [] = 0
 bwd-length (az ∷ a) = Data.Nat.suc (bwd-length az)
 
-open import Data.Nat.Properties
+open import Data.Nat.Properties using (+-suc;m+1+n≢m;+-cancelˡ-≡;m≢1+n+m;m+1+n≢0;+-cancelʳ-≡;+-assoc;+-comm)
 
 <>>-length : ∀{A}(az : Bwd A)(as : List A)
   → List.length (az <>> as) ≡ bwd-length az Data.Nat.+ List.length as
@@ -266,6 +302,12 @@ data Value where
        → BApp b p t
        → Value t
 
+
+
+-- I need a helper function that takes an application and a arity
+-- proof and then attaches the right constructor. This may save me
+-- from using with to determine this in lots of places
+
 deval : {A : ∅ ⊢Nf⋆ *}{u : ∅ ⊢ A} → Value u → ∅ ⊢ A
 deval {u = u} _ = u
 
@@ -357,9 +399,70 @@ BApp2BAPP (step⋆ p q)  = step⋆ p (BApp2BAPP q) refl refl
 
 BUILTIN : ∀ b {A}{t : ∅ ⊢ A} → BAPP b (saturated (arity b)) t → ∅ ⊢ A
 BUILTIN addInteger (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (integer j))) = con (integer (i Data.Integer.+ j))
+BUILTIN subtractInteger (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (integer j))) = con (integer (i Data.Integer.- j))
+BUILTIN multiplyInteger (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (integer j))) = con (integer (i Data.Integer.* j))
+BUILTIN divideInteger (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (integer j)))
+  with j ≟ Data.Integer.ℤ.pos 0
+... | no ¬p = con (integer (div i j))
+... | yes p = error _
+BUILTIN quotientInteger (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (integer j)))
+  with j ≟ Data.Integer.ℤ.pos 0
+... | no ¬p = con (integer (quot i j))
+... | yes p = error _
+BUILTIN remainderInteger (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (integer j)))
+  with j ≟ Data.Integer.ℤ.pos 0
+... | no ¬p = con (integer (rem i j))
+... | yes p = error _
+BUILTIN modInteger (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (integer j)))
+  with j ≟ Data.Integer.ℤ.pos 0
+... | no ¬p = con (integer (mod i j))
+... | yes p = error _
+BUILTIN lessThanInteger (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (integer j)))
+  with i <? j
+... | no ¬p = con (bool false)
+... | yes p = con (bool true)
+BUILTIN lessThanEqualsInteger (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (integer j)))
+  with i ≤? j
+... | no ¬p = con (bool false)
+... | yes p = con (bool true)
+BUILTIN greaterThanInteger (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (integer j)))
+  with i I>? j
+... | no ¬p = con (bool false)
+... | yes p = con (bool true)
+BUILTIN greaterThanEqualsInteger (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (integer j)))
+  with i I≥? j
+... | no ¬p = con (bool false)
+... | yes p = con (bool true)
+BUILTIN equalsInteger (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (integer j)))
+  with i ≟ j
+... | no ¬p = con (bool false)
+... | yes p = con (bool true)
+BUILTIN concatenate (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (bytestring b))) (V-con (bytestring b'))) = 
+  con (bytestring (concat b b'))
+BUILTIN takeByteString (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (bytestring b))) = 
+  con (bytestring (take i b))
+BUILTIN dropByteString (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (integer i))) (V-con (bytestring b))) = 
+  con (bytestring (drop i b))
+BUILTIN lessThanByteString (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (bytestring b))) (V-con (bytestring b'))) = 
+  con (bool (B< b b'))
+BUILTIN greaterThanByteString (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (bytestring b))) (V-con (bytestring b'))) = 
+  con (bool (B> b b'))
+BUILTIN sha2-256 (step .(start (Term ∷ [])) base (V-con (bytestring b))) =
+  con (bytestring (SHA2-256 b))
+BUILTIN sha3-256 (step .(start (Term ∷ [])) base (V-con (bytestring b))) =
+  con (bytestring (SHA3-256 b))
+BUILTIN verifySignature (step .(bubble (bubble (start (Term ∷ Term ∷ Term ∷ [])))) (step .(bubble (start (Term ∷ Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ Term ∷ [])) base (V-con (bytestring k))) (V-con (bytestring d))) (V-con (bytestring c)))  with verifySig k d c
+... | just b = con (bool b)
+... | nothing = error _
+BUILTIN equalsByteString (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (bytestring b))) (V-con (bytestring b'))) = 
+  con (bool (equals b b'))
 BUILTIN ifThenElse (step .(bubble (bubble (bubble (start (Type ∷ Term ∷ Term ∷ Term ∷ []))))) (step .(bubble (bubble (start (Type ∷ Term ∷ Term ∷ Term ∷ [])))) (step .(bubble (start (Type ∷ Term ∷ Term ∷ Term ∷ []))) (step⋆ .(start (Type ∷ Term ∷ Term ∷ Term ∷ [])) base refl refl) (V-con (bool true))) t) f) = deval t
 BUILTIN ifThenElse (step .(bubble (bubble (bubble (start (Type ∷ Term ∷ Term ∷ Term ∷ []))))) (step .(bubble (bubble (start (Type ∷ Term ∷ Term ∷ Term ∷ [])))) (step .(bubble (start (Type ∷ Term ∷ Term ∷ Term ∷ []))) (step⋆ .(start (Type ∷ Term ∷ Term ∷ Term ∷ [])) base refl refl) (V-con (bool false))) t) f) = deval f
-BUILTIN _ p = error _
+BUILTIN charToString (step .(start (Term ∷ [])) base (V-con (char c))) =
+  con (string (primStringFromList List.[ c ]))
+BUILTIN append (step .(bubble (start (Term ∷ Term ∷ []))) (step .(start (Term ∷ Term ∷ [])) base (V-con (string s))) (V-con (string s'))) = 
+  con (string (primStringAppend s s'))
+BUILTIN trace (step .(start (Term ∷ [])) base (V-con (string s))) = con unit
 
 BUILTIN' : ∀ b {A}{t : ∅ ⊢ A}{az}(p : az <>> [] ∈ arity b)
   → BApp b p t
@@ -426,6 +529,8 @@ data EC : (T : ∅ ⊢Nf⋆ *) → (H : ∅ ⊢Nf⋆ *) → Set where
     → EC (μ A B) C
     → EC (nf (embNf A · ƛ (μ (embNf (weakenNf A)) (` Z)) · embNf B)) C
 
+{-# INJECTIVE EC #-}
+
 data EC' : (T : ∅ ⊢Nf⋆ *) → (H : ∅ ⊢Nf⋆ *) → Set where
   []   : {A : ∅ ⊢Nf⋆ *} → EC' A A
   _l·_ : {A B C : ∅ ⊢Nf⋆ *} → EC' (A ⇒ B) C → ∅ ⊢ A → EC' B C
@@ -490,6 +595,14 @@ _[_]ᴱ : ∀{A B : ∅ ⊢Nf⋆ *} → EC B A → ∅ ⊢ A → ∅ ⊢ B
 (E ·⋆ A) [ L ]ᴱ = E [ L ]ᴱ ·⋆ A
 (wrap   E) [ L ]ᴱ = wrap _ _ (E [ L ]ᴱ)
 (unwrap E) [ L ]ᴱ = unwrap (E [ L ]ᴱ)
+
+lemΛE : ∀{K}{B : ∅ ,⋆ K ⊢Nf⋆ *}
+  → ∀{L : ∅ ,⋆ K ⊢ B}{X}{L' : ∅ ⊢ X}{Y}
+  → Y ≡ Π B
+  → (E : EC Y X)
+  → Λ L ≅ E [ L' ]ᴱ
+  → E ≅ EC.[] {A = Y} × Λ L ≅ L'
+lemΛE eq [] p = refl ,, p
 
 _[_]ᶠ : ∀{A B : ∅ ⊢Nf⋆ *} → Frame B A → ∅ ⊢ A → ∅ ⊢ B
 (-· M') [ L ]ᶠ = L · M' 
@@ -1008,6 +1121,17 @@ bappTypeLem trace {az = az} {as} M p q
   with <>>-cancel-both' az ([] ∷ Type) ([] ∷ Term) as p refl
 ... | refl ,, refl ,, ()
 
+-- a smart constructor that looks at the arity and then puts on the right constructor
+V-I : ∀ b {A : ∅ ⊢Nf⋆ *}{a as as'}
+       → (p : as <>> a ∷ as' ∈ arity b)
+       → {t : ∅ ⊢ A}
+       → BApp b p t
+       → Value t
+V-I b {a = Term} p q with bappTermLem b _ p (BApp2BAPP q)
+... | _ ,, _ ,, refl = V-I⇒ b p q
+V-I b {a = Type} p q  with bappTypeLem b _ p (BApp2BAPP q)
+... | _ ,, _ ,, refl = V-IΠ b p q
+
 progress : {A : ∅ ⊢Nf⋆ *} → (M : ∅ ⊢ A) → Progress M
 progress (ƛ M)        = done (V-ƛ M)
 progress (M · M')     with progress M
@@ -1022,12 +1146,8 @@ progress (.(ƛ M) · M') | done (V-ƛ M) | done VM' =
   step (ruleEC [] (β-ƛ VM') refl refl)
 progress (M · M') | done (V-I⇒ b {as' = []} p q) | done VM' =
   step (ruleEC [] (β-sbuiltin b M p q M' VM') refl refl)
-progress (M · M') | done (V-I⇒ b {as' = Term ∷ as'} p q) | done VM'
-  with bappTermLem b (M · M') (bubble p) (BApp2BAPP (step p q VM'))
-... | _ ,, _ ,, refl = done (V-I⇒ b (bubble p) (BApp.step p q VM'))
-progress (M · M') | done (V-I⇒ b {as' = Type ∷ as'} p q) | done VM'
-  with bappTypeLem b (M · M') (bubble p) (BApp2BAPP (step p q VM'))
-... | _ ,, _ ,, refl = done (V-IΠ b (bubble p) (BApp.step p q VM'))
+progress (M · M') | done (V-I⇒ b {as' = a ∷ as'} p q) | done VM' =
+  done (V-I b (bubble p) (step p q VM'))
 progress (Λ M)        = done (V-Λ M)
 progress (M ·⋆ A) with progress M
 ... | error E-error = step (ruleErr ([] ·⋆ A) refl)
@@ -1036,14 +1156,8 @@ progress (M ·⋆ A) with progress M
 ... | done (V-Λ M') = step (ruleEC [] β-Λ refl refl)
 progress (M ·⋆ A) | done (V-IΠ b {as' = []}         p q) =
   step (ruleEC [] (β-sbuiltin⋆ b M p q A) refl refl)
-progress (M ·⋆ A) | done (V-IΠ b {as' = Term ∷ as'} p q)
-  with bappTermLem b (M ·⋆ A) (bubble p) (BApp2BAPP (step⋆ p q))
-... | _ ,, _ ,, X =
-  done (convVal' X (V-I⇒ b (bubble p) (convBApp1 b X (step⋆ p q))))
-progress (M ·⋆ A) | done (V-IΠ b {as' = Type ∷ as'} p q)
-  with bappTypeLem b (M ·⋆ A) (bubble p) (BApp2BAPP (step⋆ p q))
-... | _ ,, _ ,, X =
-  done (convVal' X (V-IΠ b (bubble p) (convBApp1 b X (step⋆ p q))))
+progress (M ·⋆ A) | done (V-IΠ b {as' = a ∷ as'} p q) =
+  done (V-I b (bubble p) (step⋆ p q))
 progress (wrap A B M) with progress M
 ... | done V            = done (V-wrap V)
 ... | step (ruleEC E p refl refl) = step (ruleEC (wrap E) p refl refl)
@@ -1080,12 +1194,8 @@ lemma51 (.(ƛ M) · M') | inj₁ (V-ƛ M)      | inj₁ VM' =
   inj₂ (_ ,, [] ,, _ ,, inj₁ (_ ,, β-ƛ VM') ,, refl)
 lemma51 (M · M') | inj₁ (V-I⇒ b {as' = []} p x) | inj₁ VM' =
   inj₂ (_ ,, [] ,, _ ,, inj₁ (_ ,, β-sbuiltin b M p x M' VM') ,, refl)
-lemma51 (M · M') | inj₁ (V-I⇒ b {as' = Term ∷ as'} p x) | inj₁ VM'
-  with bappTermLem b (M · M') (bubble p) (BApp2BAPP (step p x VM'))
-... | _ ,, _ ,, refl = inj₁ (V-I⇒ b (bubble p) (step p x VM'))
-lemma51 (M · M') | inj₁ (V-I⇒ b {as' = Type ∷ as'} p x) | inj₁ VM'
-  with bappTypeLem b (M · M') (bubble p) (BApp2BAPP (step p x VM'))
-... | _ ,, _ ,, refl = inj₁ (V-IΠ b (bubble p) (step p x VM'))
+lemma51 (M · M') | inj₁ (V-I⇒ b {as' = a ∷ as'} p x) | inj₁ VM' =
+  inj₁ (V-I b (bubble p) (step p x VM'))
 lemma51 (Λ M) = inj₁ (V-Λ M)
 lemma51 (M ·⋆ A) with lemma51 M
 ... | inj₁ (V-Λ M') =
@@ -1094,14 +1204,8 @@ lemma51 (M ·⋆ A) with lemma51 M
   inj₂ (B ,, E ·⋆ A ,, L ,, p ,, cong (_·⋆ A) q)
 lemma51 (M ·⋆ A) | inj₁ (V-IΠ b {as' = []} p x) =
   inj₂ (_ ,, [] ,, _ ,, inj₁ (_ ,, β-sbuiltin⋆ b M p x A) ,, refl)
-lemma51 (M ·⋆ A) | inj₁ (V-IΠ b {as' = Term ∷ as} p x)
-  with bappTermLem b (M ·⋆ A) (bubble p) (BApp2BAPP (step⋆ p x))
-... | _ ,, _ ,, q =
-  inj₁ (convVal' q (V-I⇒ b (bubble p) (convBApp1 b q (step⋆ p x))))
-lemma51 (M ·⋆ A) | inj₁ (V-IΠ b {as' = Type ∷ as} p x)
-  with bappTypeLem b (M ·⋆ A) (bubble p) (BApp2BAPP (step⋆ p x))
-... | _ ,, _ ,, q =
-  inj₁ (convVal' q (V-IΠ b (bubble p) (convBApp1 b q (step⋆ p x))))
+lemma51 (M ·⋆ A) | inj₁ (V-IΠ b {as' = a ∷ as} p x) =
+  inj₁ (V-I b (bubble p) (step⋆ p x))
 lemma51 (wrap A B M) with lemma51 M
 ... | inj₁ V = inj₁ (V-wrap V)
 ... | inj₂ (C ,, E ,, L ,, p ,, p') =
@@ -1258,8 +1362,6 @@ valred (V-IΠ b₁ .(bubble p₁) q (step⋆ p₁ x)) (β-sbuiltin⋆ b t p bt A
   with uniqueBApp' t p₁ p x bt
 ... | refl ,, refl ,, () ,, refl
 
-
-
 bapperr : ∀{A}{L : ∅ ⊢ A}{b az as}{p : az <>> as ∈ arity b}
   → Error L → BApp b p L → ⊥
 bapperr () base
@@ -1324,56 +1426,8 @@ data RProgress {A : ∅ ⊢Nf⋆ *} (M : ∅ ⊢ A) : Set where
       -----------
     → RProgress M
 
--- these negative things can probably be most easily proved via a less
--- rigid representation e.g, removing some green slime or even via
--- extrinsic typing
-
-lem-·⋆ : ∀{K K'}{A : ∅ ⊢Nf⋆ K}{A' : ∅ ⊢Nf⋆ K'}{B B'}
-  → (o : K ≡ K')
-  → (p : substEq (∅ ⊢Nf⋆_) o A ≡ A')
-  → (q : Π B ≡ Π B')
-  → (r : B [ A ]Nf ≡ B' [ A' ]Nf)
-  → ∀{M}
-  → substEq (∅ ⊢_) q M ·⋆ A' ≡ substEq (∅ ⊢_) r (M ·⋆ A)
-lem-·⋆ refl refl refl refl = refl
-
-open import Relation.Binary.HeterogeneousEquality using (_≅_;≡-subst-removable;refl;≡-to-≅;≅-to-≡) renaming (sym to hsym; trans to htrans; cong to hcong)
-
-lem-·⋆' : ∀{K K'}{A : ∅ ⊢Nf⋆ K}{A' : ∅ ⊢Nf⋆ K'}{B : ∅ ,⋆ K ⊢Nf⋆ *}{B' : ∅ ,⋆ K' ⊢Nf⋆ *}
-  → ∀{M : ∅ ⊢ Π B}{M' : ∅ ⊢ Π B'}
-  → M' _⊢_.·⋆ A' ≅ M _⊢_.·⋆ A
-  → M' ≅ M × A ≅ A' × B ≅ B'
-lem-·⋆' refl = refl ,, refl ,, refl
-
-lem-·⋆wrap : ∀{K K'}{A : ∅ ⊢Nf⋆ K}{A'}{B : ∅ ,⋆ K ⊢Nf⋆ *}{B' : ∅ ⊢Nf⋆ K'}
-  → ∀{M : ∅ ⊢ Π B}{M' : ∅ ⊢ _}
-  → M _⊢_.·⋆ A ≅ _⊢_.wrap A' B' M'
-  → ⊥
-lem-·⋆wrap ()
-
-lem-·⋆unwrap : ∀{K K'}{A : ∅ ⊢Nf⋆ K}{A'}{B : ∅ ,⋆ K ⊢Nf⋆ *}{B' : ∅ ⊢Nf⋆ K'}
-  → ∀{M : ∅ ⊢ Π B}{M' : ∅ ⊢ μ A' B'}
-  → M _⊢_.·⋆ A ≅ _⊢_.unwrap M'
-  → ⊥
-lem-·⋆unwrap ()
-
-lem-unwrap : ∀{K K'}{A}{A'}{B : ∅ ⊢Nf⋆ K}{B' : ∅ ⊢Nf⋆ K'}
-  → ∀{M : ∅ ⊢ μ A B}{M' : ∅ ⊢ μ A' B'}
-  → _⊢_.unwrap M ≅ _⊢_.unwrap M'
-  → A ≅ A' × B ≅ B' × M ≅ M'
-lem-unwrap refl = refl ,, refl ,, refl 
-
-
-lemΛE : ∀{K}{B : ∅ ,⋆ K ⊢Nf⋆ *}
-  → ∀{L : ∅ ,⋆ K ⊢ B}{X}{L' : ∅ ⊢ X}{Y}
-  → Y ≡ Π B
-  → (E : EC Y X)
-  → Λ L ≅ E [ L' ]ᴱ
-  → E ≅ EC.[] {A = Y} × Λ L ≅ L'
-lemΛE eq [] p = refl ,, p
 
 -- a beta⋆ reduction happened
-{-# INJECTIVE _⊢Nf⋆_ #-}
 
 U·⋆1 : ∀{A : ∅ ⊢Nf⋆ K}{B}{L : ∅ ,⋆ K ⊢ B}{X}
  {B' : ∅ ⊢Nf⋆ *}
@@ -1572,12 +1626,8 @@ rlemma51! (M · M') | done (V-I⇒ b {as' = []}      p q) | done VM' = step
   λ { [] refl (β (β-sbuiltin b .M p bt .M' vu)) → refl ,, refl ,, refl
     ; (E l· x) refl p' → ⊥-elim (valredex (lemBE _ E q) p')
     ; (x ·r E) refl p' → ⊥-elim (valredex (lemVE _ E (Value2VALUE VM')) p')}
-rlemma51! (M · M') | done (V-I⇒ b {as' = Term ∷ as'} p q) | done VM'
-  with bappTermLem b (M · M') (bubble p) (BApp2BAPP (step p q VM'))
-... | _ ,, _ ,, refl = done (V-I⇒ b (bubble p) (step p q VM'))
-rlemma51! (M · M') | done (V-I⇒ b {as' = Type ∷ as'} p q) | done VM'
-  with bappTypeLem b (M · M') (bubble p) (BApp2BAPP (step p q VM'))
-... | _ ,, _ ,, refl = done (V-IΠ b (bubble p) (step p q VM'))
+rlemma51! (M · M') | done (V-I⇒ b {as' = a ∷ as'} p q) | done VM' =
+  done (V-I b (bubble p) (step p q VM'))
 rlemma51! (Λ M)        = done (V-Λ M)
 rlemma51! (M ·⋆ A)     with rlemma51! M
 ... | done (V-Λ L)      = step
@@ -1600,15 +1650,10 @@ rlemma51! (M ·⋆ A) | done (V-IΠ b {as' = []} p x) = step
   (β (β-sbuiltin⋆ b M p x A))
   refl
   λ E p q → let X ,, Y ,, Y' = U·⋆3 refl E (V-IΠ b _ x) (≡-to-≅ p) q in
-    X ,, ≅-to-≡ Y ,, ≅-to-≡ Y' 
-rlemma51! (M ·⋆ A) | done (V-IΠ b {as' = Term ∷ as'} p x)
-  with bappTermLem b (M ·⋆ A) (bubble p) (BApp2BAPP (step⋆ p x))
-... | _ ,, _ ,, X =
-  done (convVal' X (V-I⇒ b (bubble p) (convBApp1 b X (step⋆ p x))))
-rlemma51! (M ·⋆ A) | done (V-IΠ b {as' = Type ∷ as'} p x)
-  with bappTypeLem b (M ·⋆ A) (bubble p) (BApp2BAPP (step⋆ p x))
-... | _ ,, _ ,, X =
-  done (convVal' X (V-IΠ b (bubble p) (convBApp1 b X (step⋆ p x))))
+    X ,, ≅-to-≡ Y ,, ≅-to-≡ Y'
+    
+rlemma51! (M ·⋆ A) | done (V-IΠ b {as' = a ∷ as'} p x) =
+  done (V-I b (bubble p) (step⋆ p x))
 rlemma51! (wrap A B M) with rlemma51! M
 ... | done VM = done (V-wrap VM)
 ... | step ¬VM E p q U = step
@@ -1642,7 +1687,16 @@ rlemma51! (error _)    = step
   refl
   λ { [] p q → refl ,, refl ,, p}
 
-notVAL : ∀{A}{L N N' : ∅ ⊢ A} → Value L → L —→ N' → ⊥
+unique-EC : ∀{A B}(E E' : EC A B)(L : ∅ ⊢ B) → Redex L
+  → E [ L ]ᴱ ≡ E' [ L ]ᴱ → E ≡ E'
+unique-EC  E E' L p q with rlemma51! (E [ L ]ᴱ)
+... | done VEL = ⊥-elim (valredex (lemVE L E (Value2VALUE VEL)) p)
+... | step ¬VEL E'' r r' U with U E' q p
+... | refl ,, refl ,, refl with U E refl p
+... | refl ,, refl ,, refl = refl
+
+
+notVAL : ∀{A}{L N : ∅ ⊢ A} → Value L → L —→ N → ⊥
 notVAL V (ruleEC E p refl r) = valred (lemVE _ E (Value2VALUE V)) p
 notVAL V (ruleErr E refl)    =
   valerr E-error (VALUE2Value (lemVE _ E (Value2VALUE V)))
@@ -1667,3 +1721,4 @@ determinism {L = L} (ruleErr E' p) (ruleEC E'' q q' q'') | step ¬VL E err r' U 
 determinism {L = L} (ruleErr E' p) (ruleEC .E () q' q'') | step ¬VL E err r' U | refl ,, refl ,, refl
 determinism {L = L} (ruleErr E' p) (ruleErr E'' q) | step ¬VL E err r' U with U E' p err | U E'' q err
 ... | refl ,, refl ,, refl | refl ,, refl ,, refl = refl
+-- -}

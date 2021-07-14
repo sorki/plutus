@@ -12,7 +12,7 @@ import           Data.ByteString      as BS
 
 import           Prelude              (Int, Integer, Maybe (..), error)
 
-import           PlutusTx.Data
+import           PlutusCore.Data
 
 import           PlutusTx.Functor
 import           PlutusTx.Traversable
@@ -21,6 +21,7 @@ import           Data.Kind
 import           Data.Void
 
 import           GHC.TypeLits         (ErrorMessage (..), TypeError)
+
 
 {- HLINT ignore -}
 

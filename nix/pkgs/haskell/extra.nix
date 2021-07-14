@@ -17,7 +17,7 @@
 let
   agdaProject = haskell-nix.hackage-project {
     name = "Agda";
-    version = "2.6.1.1";
+    version = "2.6.2";
     plan-sha256 = lib.removeSuffix "\n" (builtins.readFile (
       if stdenv.hostPlatform.isWindows
         then ./agda-windows.sha
@@ -52,7 +52,6 @@ let
         done
       '';
     }];
-    configureArgs = "--constraint 'haskeline == 0.8.0.0'";
   };
   cabalInstallProject = haskell-nix.hackage-project {
     name = "cabal-install";

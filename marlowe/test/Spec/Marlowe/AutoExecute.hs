@@ -51,8 +51,8 @@ import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck
 
-{-HLINT ignore "Reduce duplication"-}
-{-HLINT ignore "Redundant if"-}
+{- HLINT ignore "Reduce duplication" -}
+{- HLINT ignore "Redundant if" -}
 
 tests :: TestTree
 tests = testGroup "Marlowe Auto Execution"
