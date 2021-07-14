@@ -103,6 +103,9 @@ instance HasDefinitions UniswapContracts where
         UniswapStart   -> SomeBuiltin Uniswap.ownerEndpoint
         Init           -> SomeBuiltin US.setupTokens
 
+handleUniswapContract :: BuiltinHandler UniswapContracts
+handleUniswapContract = Builtin.handleBuiltin
+
 handlers :: SimulatorEffectHandlers (Builtin UniswapContracts)
 handlers =
     Simulator.mkSimulatorHandlers @(Builtin UniswapContracts) -- [] -- [Init, UniswapStart, UniswapUser ???]

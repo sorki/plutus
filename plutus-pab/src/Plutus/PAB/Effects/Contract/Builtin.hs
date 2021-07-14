@@ -23,6 +23,7 @@ module Plutus.PAB.Effects.Contract.Builtin(
     Builtin
     , ContractConstraints
     , SomeBuiltin(..)
+    , BuiltinContract(..)
     , BuiltinHandler(..)
     , handleBuiltin
     -- * Extracting schemas from contracts
@@ -102,8 +103,8 @@ instance PABContract (Builtin a) where
 
 class HasDefinitions a where
     getDefinitions :: [a]
-    getContract :: a -> SomeBuiltin
-    getSchema :: a -> [FunctionSchema FormSchema]
+    getContract :: a -> SomeBuiltin -- ^ The actual contract
+    getSchema :: a -> [FunctionSchema FormSchema] -- ^ The schema (construct with 'endpointsToSchemas'. Can also be an empty list)
 
 -- | Defined in order to prevent type errors like: "Couldn't match type 'effs'
 -- with 'effs1'".

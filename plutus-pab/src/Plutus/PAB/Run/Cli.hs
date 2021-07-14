@@ -37,22 +37,23 @@ import           Control.Monad.Freer                 (Eff, Member, interpret)
 import           Control.Monad.Freer.Delay           (DelayEffect, delayThread)
 import           Control.Monad.Freer.Extras.Log      (logInfo)
 import           Control.Monad.IO.Class              (liftIO)
-import           Data.Aeson                          (FromJSON, ToJSON)
-import           Data.Foldable                       (traverse_)
+import           Data.Aeson                          (FromJSON, Result (..), ToJSON, Value, fromJSON)
+import           Data.Foldable                       (foldl', traverse_)
 import qualified Data.Map                            as Map
 import           Data.Proxy                          (Proxy (..))
 import qualified Data.Set                            as Set
 import qualified Data.Text                           as Text
 import           Data.Time.Units                     (Second)
 import           Data.Typeable                       (Typeable)
-import           Plutus.Contract.Resumable           (responses)
-import           Plutus.Contract.State               (State (..))
+import           Plutus.Contract.Resumable           (responses, rspResponse)
+import           Plutus.Contract                     (Contract)
+import           Plutus.Contract.State               (ContractResponse, State (..))
 import qualified Plutus.Contract.State               as State
 import qualified Plutus.PAB.App                      as App
 import qualified Plutus.PAB.Core                     as Core
 import qualified Plutus.PAB.Db.Beam                  as Beam
 import qualified Plutus.PAB.Effects.Contract         as Contract
-import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler, HasDefinitions)
+import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler, HasDefinitions, SomeBuiltin (..), getResponse)
 import qualified Plutus.PAB.Monitoring.Monitoring    as LM
 import           Plutus.PAB.Run.Command
 import qualified Plutus.PAB.Run.PSGenerator          as PSGenerator
@@ -61,6 +62,9 @@ import           Plutus.PAB.Types                    (Config (..), DbConfig (..)
 import qualified Plutus.PAB.Webserver.Server         as PABServer
 import           Plutus.PAB.Webserver.Types          (ContractActivationArgs (..))
 import qualified Servant
+
+import           Plutus.Contract.Effects             (PABReq (..))
+import qualified Plutus.Trace.Emulator.Types         as Emulator
 
 runNoConfigCommand ::
     Trace IO (LM.AppMsg (Builtin a))  -- ^ PAB Tracer logging instance
@@ -131,13 +135,35 @@ runConfigCommand _ ConfigCommandArgs{ccaTrace, ccaPABConfig = Config {metadataSe
         ccaAvailability
 
 -- Run PAB webserver
-runConfigCommand contractHandler ConfigCommandArgs{ccaTrace, ccaPABConfig=config@Config{pabWebserverConfig}, ccaAvailability, ccaStorageBackend} PABWebserver =
-        fmap (either (error . show) id)
-        $ App.runApp ccaStorageBackend (toPABMsg ccaTrace) contractHandler config
+runConfigCommand contractHandler ConfigCommandArgs{ccaTrace, ccaPABConfig=config@Config{pabWebserverConfig, dbConfig}, ccaAvailability, ccaStorageBackend} PABWebserver =
+  do
+    -- Restore the running contracts
+    connection <- App.dbConnect (LM.convertLog LM.PABMsg ccaTrace) dbConfig
+
+    void
+        $ Beam.runBeamStoreAction connection (LM.convertLog LM.PABMsg ccaTrace)
+        $ interpret (LM.handleLogMsgTrace ccaTrace)
         $ do
-            App.AppEnv{App.walletClientEnv} <- Core.askUserEnv @(Builtin a) @(App.AppEnv a)
-            (mvar, _) <- PABServer.startServer pabWebserverConfig (Left walletClientEnv) ccaAvailability
-            liftIO $ takeMVar mvar
+            cIds   <- Map.toList <$> Contract.getActiveContracts @(Builtin a)
+            states <- flip mapM cIds $ \(cid, args) ->
+              do
+                s <- Contract.getState @(Builtin a) cid
+                let SomeBuiltin cd = contractDefinition (caID args)
+                pure (s, cd)
+            let rs = map (\(st, cd) -> reconstructInternalState cd (getResponse st)) states
+            -- Note: instead of 'getResponse' could be
+            -- `Contract.serialisableState (Proxy @(Builtin a))`
+
+            -- TODO: Now, spin up the contracts!
+            drainLog
+
+    -- Start the server
+    fmap (either (error . show) id)
+      $ App.runApp ccaStorageBackend (toPABMsg ccaTrace) contractHandler config
+      $ do
+          App.AppEnv{App.walletClientEnv} <- Core.askUserEnv @(Builtin a) @(App.AppEnv a)
+          (mvar, _) <- PABServer.startServer pabWebserverConfig (Left walletClientEnv) ccaAvailability
+          liftIO $ takeMVar mvar
 
 -- Fork a list of commands
 runConfigCommand contractHandler c@ConfigCommandArgs{ccaAvailability} (ForkCommands commands) =
@@ -226,3 +252,21 @@ toMockNodeServerLog = LM.convertLog $ LM.PABMsg . LM.SMockserverLogMsg
 drainLog :: Member DelayEffect effs => Eff effs ()
 drainLog = delayThread (1 :: Second)
 
+reconstructInternalState
+  :: forall w s e b. Monoid w
+  => Contract w s e b
+  -> ContractResponse Value Value Value PABReq
+  -> Maybe (Emulator.ContractInstanceStateInternal w s e b)
+reconstructInternalState contract r = foldl' f (Just s0) (responses record)
+  where
+    f mstate t =
+      mstate >>= \state ->
+          case fromJSON (rspResponse (snd <$> t)) of
+            -- TODO: Log the error? Or, just use the `Builtin` functions
+            -- `initBuiltin/updateBuiltin`?
+            Error _          -> Nothing
+            Success response -> Emulator.addEventInstanceState response state
+
+    State.ContractResponse{State.newState=State{record}} = r
+    s0 :: Emulator.ContractInstanceStateInternal w s e b
+    s0 = Emulator.emptyInstanceState contract
