@@ -81,5 +81,5 @@
       rev = "minimal";
       sha256 = "";
       };
-    postUnpack = "sourceRoot+=/io-sim-classes; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/io-classes; echo source root reset to \$sourceRoot";
     }

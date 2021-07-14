@@ -79,7 +79,7 @@
           (hsPkgs."IntervalMap" or (errorHandler.buildDepError "IntervalMap"))
           (hsPkgs."plutus-chain-index" or (errorHandler.buildDepError "plutus-chain-index"))
           (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
-          ] ++ (pkgs.lib).optional (!(compiler.isGhcjs && true || system.isGhcjs)) (hsPkgs."plutus-tx-plugin" or (errorHandler.buildDepError "plutus-tx-plugin"))) ++ (pkgs.lib).optionals (!(compiler.isGhcjs && true || system.isGhcjs)) [
+          ] ++ (pkgs.lib).optional (!(compiler.isGhcjs && true || system.isGhcjs)) (hsPkgs."plutus-tx-plugin" or (errorHandler.buildDepError "plutus-tx-plugin"))) ++ (pkgs.lib).optionals (!(compiler.isGhcjs && true || system.isGhcjs || system.isWindows)) [
           (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))
           (hsPkgs."tasty-hunit" or (errorHandler.buildDepError "tasty-hunit"))
           (hsPkgs."tasty-golden" or (errorHandler.buildDepError "tasty-golden"))
