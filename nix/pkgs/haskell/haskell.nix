@@ -114,6 +114,9 @@ let
         packages.terminal-size.components.library.build-tools = lib.mkForce [];
         packages.network.components.library.build-tools = lib.mkForce [];
         packages.process.components.library.libs = lib.mkForce [];
+        # These need R
+        packages.plutus-core.components.benchmarks.cost-model-test.buildable = lib.mkForce false;
+        packages.plutus-core.components.benchmarks.update-cost-model.buildable = lib.mkForce false;
       })
       ({pkgs, config, ...}: {
         packages = {
