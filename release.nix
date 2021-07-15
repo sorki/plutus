@@ -3,6 +3,12 @@
 , plutus ? null
 }:
 let
+  traceNames = prefix: builtins.mapAttrs (n: v:
+    if builtins.isAttrs v
+      then if v ? type && v.type == "derivation"
+        then __trace (prefix + n) v
+        else traceNames (prefix + n + ".") v
+      else v);
   inherit (import ./nix/lib/ci.nix) stripAttrsForHydra filterDerivations derivationAggregate;
 
   ci = import ./ci.nix { inherit supportedSystems; };
@@ -10,4 +16,4 @@ let
   # first), but we mainly just need to get rid of some extra attributes.
   ciJobsets = stripAttrsForHydra (filterDerivations ci);
 in
-ciJobsets // { required = derivationAggregate "required-plutus" ciJobsets; }
+traceNames "job " (ciJobsets // { required = derivationAggregate "required-plutus" ciJobsets; })
