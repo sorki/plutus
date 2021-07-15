@@ -108,6 +108,7 @@ let
         packages.Win32.components.library.build-tools = lib.mkForce [];
         # TODO fix nix-tools so this is automatic
         packages.marlowe.components.tests.marlowe-test.buildable = lib.mkForce false;
+        prettyprinter-configurable.components.tests.prettyprinter-configurable-test.buildable = lib.mkForce false;
       })
       ({ pkgs, ... }: lib.mkIf (pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform) {
         # Remove hsc2hs build-tool dependencies (suitable version will be available as part of the ghc derivation)
