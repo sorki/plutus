@@ -54,14 +54,14 @@ rec {
   webCommonMarlowe = pkgs.callPackage ./web-common-marlowe { inherit (plutus.lib) gitignore-nix; };
   webCommonPlayground = pkgs.callPackage ./web-common-playground { inherit (plutus.lib) gitignore-nix; };
 
-  plutus-playground = pkgs.recurseIntoAttrs rec {
+  plutus-playground = noCross (pkgs.recurseIntoAttrs rec {
     haddock = plutus.plutus-haddock-combined;
 
     inherit (pkgs.callPackage ./plutus-playground-client {
       inherit (plutus.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit haskell webCommon webCommonPlutus webCommonPlayground;
     }) client server generate-purescript start-backend;
-  };
+  });
 
   marlowe-playground = pkgs.recurseIntoAttrs rec {
     inherit (pkgs.callPackage ./marlowe-playground-client {
@@ -70,21 +70,21 @@ rec {
     }) client server generate-purescript start-backend;
   };
 
-  marlowe-dashboard = pkgs.recurseIntoAttrs rec {
+  marlowe-dashboard = noCross (pkgs.recurseIntoAttrs rec {
     inherit (pkgs.callPackage ./marlowe-dashboard-client {
       inherit plutus-pab marlowe-app marlowe-companion-app marlowe-follow-app;
       inherit (plutus.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit webCommon webCommonMarlowe;
     }) client server-invoker generated-purescript generate-purescript contractsJSON install-marlowe-contracts;
-  };
+  });
 
-  marlowe-dashboard-fake-pab = pkgs.recurseIntoAttrs rec {
+  marlowe-dashboard-fake-pab = noCross (pkgs.recurseIntoAttrs rec {
     inherit (pkgs.callPackage ./fake-pab {
       inherit plutus-pab marlowe-app marlowe-companion-app marlowe-follow-app;
       inherit (plutus.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit haskell webCommon webCommonMarlowe;
     }) client fake-pab-exe fake-pab-generated-purescript;
-  };
+  });
 
   marlowe-marketplace = pkgs.recurseIntoAttrs rec {
     inherit (pkgs.callPackage ./marlowe-marketplace-client {
