@@ -249,10 +249,6 @@ processSingleBinding = \case
     TermBind a s v@(VarDecl _ n _) rhs -> do
         maybeRhs' <- maybeAddSubst s n rhs
         pure $ TermBind a s v <$> maybeRhs'
-    -- See Note [Inlining various kinds of binding]
-    TypeBind _ (TyVarDecl _ tn _) rhs -> do
-        modify' (extendType tn rhs)
-        pure Nothing
     -- Not a strict binding, just process all the subterms
     b -> Just <$> forMOf bindingSubterms b processTerm
 

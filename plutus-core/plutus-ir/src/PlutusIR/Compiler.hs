@@ -49,12 +49,12 @@ import           PlutusPrelude
 
 -- | Actual simplifier
 simplify
-    :: (M.ToBuiltinMeaning uni fun, PLC.MonadQuote m)
+    :: (M.ToBuiltinMeaning uni fun, PLC.MonadQuote m, Semigroup b)
     => Term TyName Name uni fun b -> m (Term TyName Name uni fun b)
-simplify = DeadCode.removeDeadBindings <=< Inline.inline . Beta.beta . Unwrap.unwrapCancel
+simplify = DeadCode.removeDeadBindings <=< Inline.inline . LetFloat.floatTerm . Beta.beta . Unwrap.unwrapCancel
 
 -- | Perform some simplification of a 'Term'.
-simplifyTerm :: forall m e uni fun a b. Compiling m e uni fun a => Term TyName Name uni fun b -> m (Term TyName Name uni fun b)
+simplifyTerm :: forall m e uni fun a b. (Compiling m e uni fun a, Semigroup b) => Term TyName Name uni fun b -> m (Term TyName Name uni fun b)
 simplifyTerm = runIfOpts $ PLC.rename >=> DeadCode.removeDeadBindings >=> simplify'
     -- NOTE: we need at least one pass of dead code elimination
     where
