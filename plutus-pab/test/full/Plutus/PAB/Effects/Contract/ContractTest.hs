@@ -16,7 +16,6 @@
 -}
 module Plutus.PAB.Effects.Contract.ContractTest(
     TestContracts(..)
-    , handleContractTest
     ) where
 
 import           Control.Monad.Freer
@@ -36,7 +35,7 @@ import qualified Plutus.Contracts.Currency           as Contracts.Currency
 import qualified Plutus.Contracts.GameStateMachine   as Contracts.GameStateMachine
 import qualified Plutus.Contracts.PingPong           as Contracts.PingPong
 import           Plutus.PAB.Effects.Contract         (ContractEffect (..))
-import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler, SomeBuiltin (..))
+import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler, HasDefinitions (..), SomeBuiltin (..))
 import qualified Plutus.PAB.Effects.Contract.Builtin as Builtin
 import           Plutus.PAB.Monitoring.PABLogMsg     (PABMultiAgentMsg)
 import           Plutus.PAB.Types                    (PABError (..))
@@ -49,20 +48,21 @@ data TestContracts = GameStateMachine | Currency | AtomicSwap | PayToWallet | Pi
 instance Pretty TestContracts where
     pretty = viaShow
 
--- | A mock/test handler for 'ContractEffect'. Uses 'Plutus.PAB.Effects.Contract.Builtin'.
-handleContractTest :: BuiltinHandler TestContracts
-handleContractTest = Builtin.handleBuiltin getSchema getContract
+instance HasDefinitions TestContracts where
+    getDefinitions = [ GameStateMachine, Currency, AtomicSwap, PayToWallet, PingPong ]
+    getContract = getTestContracts
+    getSchema = getTestContractsSchema
 
-getSchema :: TestContracts -> [FunctionSchema FormSchema]
-getSchema = \case
+getTestContractsSchema :: TestContracts -> [FunctionSchema FormSchema]
+getTestContractsSchema = \case
     GameStateMachine -> Builtin.endpointsToSchemas @Contracts.GameStateMachine.GameStateMachineSchema
     Currency         -> Builtin.endpointsToSchemas @Contracts.Currency.CurrencySchema
     AtomicSwap       -> Builtin.endpointsToSchemas @Contracts.AtomicSwap.AtomicSwapSchema
     PayToWallet      -> Builtin.endpointsToSchemas @Contracts.PayToWallet.PayToWalletSchema
     PingPong         -> Builtin.endpointsToSchemas @Contracts.PingPong.PingPongSchema
 
-getContract :: TestContracts -> SomeBuiltin
-getContract = \case
+getTestContracts :: TestContracts -> SomeBuiltin
+getTestContracts = \case
     GameStateMachine -> SomeBuiltin game
     Currency         -> SomeBuiltin currency
     AtomicSwap       -> SomeBuiltin swp

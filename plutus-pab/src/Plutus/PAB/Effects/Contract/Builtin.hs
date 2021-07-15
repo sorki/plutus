@@ -13,6 +13,7 @@
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE TypeOperators       #-}
+
 {-
 
 Builtin contracts that are compiled together with the PAB.
@@ -31,6 +32,8 @@ module Plutus.PAB.Effects.Contract.Builtin(
     , Empty
     , endpointsToSchemas
     , getResponse
+    , fromResponse
+    , HasDefinitions(..)
     ) where
 
 import           Control.Monad.Freer
@@ -38,7 +41,7 @@ import           Control.Monad.Freer.Error                        (Error, throwE
 import           Control.Monad.Freer.Extras.Log                   (LogMsg (..), logDebug)
 import           Data.Aeson                                       (FromJSON, ToJSON, Value)
 import qualified Data.Aeson                                       as JSON
-import           Data.Bifunctor                                   (Bifunctor (..))
+import           Data.Bifunctor                                   (Bifunctor (first))
 import           Data.Foldable                                    (traverse_)
 import           Data.Row
 
@@ -97,37 +100,54 @@ instance PABContract (Builtin a) where
     type State (Builtin a) = SomeBuiltinState a
     serialisableState _ = getResponse
 
+class HasDefinitions a where
+    getDefinitions :: [a]
+    getContract :: a -> SomeBuiltin
+    getSchema :: a -> [FunctionSchema FormSchema]
+
 -- | Defined in order to prevent type errors like: "Couldn't match type 'effs'
 -- with 'effs1'".
 newtype BuiltinHandler a = BuiltinHandler
     { contractHandler :: forall effs.
                          ( Member (Error PABError) effs
                          , Member (LogMsg (PABMultiAgentMsg (Builtin a))) effs
-                         -- , Member (LogMsg (PABLogMsg (Builtin a))) effs
                          )
                       => ContractEffect (Builtin a) ~> Eff effs
     }
 
 -- | Handle the 'ContractEffect' for a builtin contract type with parameter
 --   @a@.
-handleBuiltin ::
-    forall a.
-    (a -> [FunctionSchema FormSchema]) -- ^ The schema (construct with 'endpointsToSchemas'. Can also be an empty list)
-    -> (a -> SomeBuiltin) -- ^ The actual contract
-    -> BuiltinHandler a
-handleBuiltin mkSchema initialise = BuiltinHandler $ \case
-    InitialState i c           -> case initialise c of SomeBuiltin c' -> initBuiltin i c'
+handleBuiltin :: HasDefinitions a => BuiltinHandler a
+handleBuiltin = BuiltinHandler $ \case
+    InitialState i c           -> case getContract c of SomeBuiltin c' -> initBuiltin i c'
     UpdateContract i _ state p -> case state of SomeBuiltinState s w -> updateBuiltin i s w p
-    ExportSchema a             -> pure $ mkSchema a
+    ExportSchema a             -> pure $ getSchema a
 
 getResponse :: forall a. SomeBuiltinState a -> ContractResponse Value Value Value PABReq
 getResponse (SomeBuiltinState s w) =
-    bimap JSON.toJSON id
+    first JSON.toJSON
     $ ContractState.mapE JSON.toJSON
     $ ContractState.mapW JSON.toJSON
     $ ContractState.mkResponse w
     $ Emulator.instContractState
     $ Emulator.toInstanceState s
+
+-- | TODO: Replay from the ContractResponse the state of 'Builtin a' using 'Emulator.emptyInstanceState' and 'Emulator.addEventInstanceState'.
+fromResponse :: forall a. ContractResponse Value Value Value PABReq -> Maybe (SomeBuiltinState a)
+fromResponse _ = do
+    -- let toPABResp = \x -> JSON.fromJSON x :: Result PABResp
+    -- let resp' = fmap (toPABResp . snd) <$> responses (record $ newState resp)
+    -- w <- case JSON.fromJSON lastState of
+    --        Error _ -> Nothing
+    --        Success w -> pure w
+    -- pure $ SomeBuiltinState undefined w
+    pure undefined
+ -- where
+ --     toPABResp :: Value -> Maybe PABResp
+ --     toPABResp v =
+ --         case JSON.fromJSON v of
+ --           Success v' -> Just v'
+ --           Error _ -> Nothing
 
 initBuiltin ::
     forall effs a w schema error b.
@@ -172,4 +192,3 @@ logNewMessages ::
     -> Eff effs ()
 logNewMessages i ContractInstanceStateInternal{cisiSuspState=SuspendedContract{_resumableResult=ResumableResult{_lastLogs, _observableState}}} = do
     traverse_ (send @(LogMsg (PABMultiAgentMsg (Builtin b))) . LMessage . fmap (ContractInstanceLog . ContractLog i)) _lastLogs
-

@@ -72,12 +72,12 @@ psGeneratorCommandParser :: Mod CommandFields NoConfigCommand
 psGeneratorCommandParser =
     command "psgenerator" $
     flip info (fullDesc <> progDesc "Generate the frontend's PureScript files.") $ do
-        outputDir <-
+        psGenOutputDir <-
             argument
                 str
                 (metavar "OUTPUT_DIR" <>
                  help "Output directory to write PureScript files to.")
-        pure $ PSGenerator {outputDir}
+        pure $ PSGenerator {psGenOutputDir}
 
 migrationParser :: Mod CommandFields NoConfigCommand
 migrationParser =

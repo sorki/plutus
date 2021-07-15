@@ -32,13 +32,16 @@ data ConfigCommand =
     -- | ReportInstalledContracts -- ^ Get installed contracts
     | ReportActiveContracts -- ^ Get active contracts
     | PABWebserver -- ^ Run the PAB webserver
+    | PSApiGenerator -- ^ Generate purescript bridge code
+          { psApiGenOutputDir :: !FilePath -- ^ Path to write generated code to
+          }
     deriving stock (Show, Eq, Generic)
     deriving anyclass JSON.ToJSON
 
 data NoConfigCommand =
     Migrate { dbPath :: !FilePath } -- ^ Execute a database migration
     | PSGenerator -- ^ Generate purescript bridge code
-          { outputDir :: !FilePath -- ^ Path to write generated code to
+          { psGenOutputDir :: !FilePath -- ^ Path to write generated code to
           }
     | WriteDefaultConfig -- ^ Write default logging configuration
           { outputFile :: !FilePath -- ^ Path to write configuration to

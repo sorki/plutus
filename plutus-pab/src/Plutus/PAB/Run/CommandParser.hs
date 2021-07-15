@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 
+{-# LANGUAGE NamedFieldPuns        #-}
 module Plutus.PAB.Run.CommandParser (parseOptions, AppOpts(..)) where
 
 import           Cardano.BM.Data.Severity (Severity (..))
@@ -99,7 +100,19 @@ commandParser =
                              , reportContractHistoryParser
                              ]))
                    (fullDesc <> progDesc "Manage your smart contracts."))
+        , psGeneratorCommandParser
         ]
+
+psGeneratorCommandParser :: Mod CommandFields ConfigCommand
+psGeneratorCommandParser =
+    command "psapigenerator" $
+    flip info (fullDesc <> progDesc "Generate the frontend's PureScript files for the webserver API.") $ do
+        psApiGenOutputDir <-
+            argument
+                str
+                (metavar "OUTPUT_DIR" <>
+                 help "Output directory to write PureScript files to.")
+        pure $ PSApiGenerator {psApiGenOutputDir}
 
 mockNodeParser :: Mod CommandFields ConfigCommand
 mockNodeParser =

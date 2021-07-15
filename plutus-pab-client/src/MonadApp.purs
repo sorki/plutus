@@ -18,7 +18,7 @@ import Effect.Console as Console
 import Halogen (HalogenM, liftEffect, raise)
 import Network.RemoteData as RemoteData
 import Playground.Lenses (_getEndpointDescription)
-import Plutus.PAB.Effects.Contract.ContractExe (ContractExe)
+import Plutus.PAB.Effects.Contract.Builtin (Builtin)
 import Plutus.PAB.Webserver (SPParams_, getApiContractByContractinstanceidSchema, getApiFullreport, postApiContractActivate, postApiContractByContractinstanceidEndpointByEndpointname)
 import Plutus.PAB.Webserver.Types (ContractSignatureResponse, FullReport, CombinedWSStreamToServer)
 import Servant.PureScript.Ajax (AjaxError)
@@ -27,10 +27,10 @@ import Wallet.Types (EndpointDescription, ContractInstanceId, NotificationError)
 
 class
   Monad m <= MonadApp m where
-  getFullReport :: m (WebData (FullReport ContractExe))
-  getContractSignature :: ContractInstanceId -> m (WebData (ContractSignatureResponse ContractExe))
+  getFullReport :: m (WebData (FullReport (Builtin a)))
+  getContractSignature :: ContractInstanceId -> m (WebData (ContractSignatureResponse (Builtin a)))
   invokeEndpoint :: RawJson -> ContractInstanceId -> EndpointDescription -> m (WebData (Maybe NotificationError))
-  activateContract :: ContractExe -> m Unit
+  activateContract :: Builtin a -> m Unit
   sendWebSocketMessage :: CombinedWSStreamToServer -> m Unit
   log :: String -> m Unit
 

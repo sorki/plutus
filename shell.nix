@@ -76,15 +76,16 @@ let
     haskell-language-server
     hie-bios
     hlint
+    marlowe-dashboard.generate-purescript
     marlowe-playground.generate-purescript
     marlowe-playground.start-backend
     plutus-playground.generate-purescript
     plutus-playground.start-backend
     plutus-pab.generate-purescript
     plutus-pab.migrate
-    # plutus-pab.start-backend
-    # plutus-pab.start-all-servers
-    # plutus-pab.start-all-servers-m
+    plutus-pab.start-backend
+    plutus-pab.start-all-servers
+    plutus-pab.start-all-servers-m
     purs
     purty
     spago

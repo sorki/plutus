@@ -16,7 +16,6 @@
 -}
 module ContractExample(
     ExampleContracts(..)
-    , handleContractExample
     , handlers
     ) where
 
@@ -29,17 +28,20 @@ import qualified ContractExample.AtomicSwap          as Contracts.AtomicSwap
 import qualified ContractExample.PayToWallet         as Contracts.PayToWallet
 import qualified ContractExample.WaitForTx           as Contracts.WaitForTx
 import           Data.Row
+import           Language.PureScript.Bridge          (buildBridge)
 import           Playground.Types                    (FunctionSchema)
 import qualified Plutus.Contracts.Currency           as Contracts.Currency
 import qualified Plutus.Contracts.GameStateMachine   as Contracts.GameStateMachine
 import qualified Plutus.Contracts.Prism.Mirror       as Contracts.Prism
 import qualified Plutus.Contracts.Prism.Unlock       as Contracts.Prism
 import qualified Plutus.Contracts.Uniswap            as Contracts.Uniswap
-import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler (..), SomeBuiltin (..))
+import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler (..), HasDefinitions (..),
+                                                      SomeBuiltin (..))
 import qualified Plutus.PAB.Effects.Contract.Builtin as Builtin
 import           Plutus.PAB.Simulator                (SimulatorEffectHandlers)
 import qualified Plutus.PAB.Simulator                as Simulator
 import           Schema                              (FormSchema)
+import           Servant.PureScript                  (HasBridge (languageBridge), defaultBridge)
 
 data ExampleContracts = UniswapInit
                       | UniswapOwner
@@ -58,11 +60,26 @@ data ExampleContracts = UniswapInit
 instance Pretty ExampleContracts where
     pretty = viaShow
 
-handleContractExample :: BuiltinHandler ExampleContracts
-handleContractExample = Builtin.handleBuiltin getSchema getContract
+instance HasBridge ExampleContracts where
+    languageBridge _ = buildBridge defaultBridge
 
-getSchema :: ExampleContracts -> [FunctionSchema FormSchema]
-getSchema = \case
+instance HasDefinitions ExampleContracts where
+    getDefinitions = [ UniswapInit
+                     , UniswapOwner
+                     , GameStateMachine
+                     , PayToWallet
+                     , AtomicSwap
+                     , Currency
+                     , PrismMirror
+                     , PrismUnlockExchange
+                     , PrismUnlockSto
+                     , WaitForTx
+                     ]
+    getContract = getExampleContracts
+    getSchema = getExampleContractsSchema
+
+getExampleContractsSchema :: ExampleContracts -> [FunctionSchema FormSchema]
+getExampleContractsSchema = \case
     UniswapInit         -> Builtin.endpointsToSchemas @Empty
     UniswapUser _       -> Builtin.endpointsToSchemas @Contracts.Uniswap.UniswapUserSchema
     UniswapOwner        -> Builtin.endpointsToSchemas @Contracts.Uniswap.UniswapOwnerSchema
@@ -75,8 +92,8 @@ getSchema = \case
     PrismUnlockSto      -> Builtin.endpointsToSchemas @Contracts.Prism.STOSubscriberSchema
     WaitForTx           -> Builtin.endpointsToSchemas @Contracts.WaitForTx.WaitForTxSchema
 
-getContract :: ExampleContracts -> SomeBuiltin
-getContract = \case
+getExampleContracts :: ExampleContracts -> SomeBuiltin
+getExampleContracts = \case
     UniswapInit         -> SomeBuiltin Contracts.Uniswap.setupTokens
     UniswapUser us      -> SomeBuiltin $ Contracts.Uniswap.userEndpoints us
     UniswapOwner        -> SomeBuiltin Contracts.Uniswap.ownerEndpoint
@@ -92,4 +109,4 @@ getContract = \case
 handlers :: SimulatorEffectHandlers (Builtin ExampleContracts)
 handlers =
     Simulator.mkSimulatorHandlers @(Builtin ExampleContracts)
-    $ interpret (contractHandler handleContractExample)
+    $ interpret (contractHandler Builtin.handleBuiltin)

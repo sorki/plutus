@@ -31,7 +31,7 @@ import Network.StreamData (StreamData)
 import Network.StreamData as Stream
 import Playground.Types (FunctionSchema)
 import Plutus.Contract.Effects (PABReq, ActiveEndpoint, _ExposeEndpointReq)
-import Plutus.PAB.Effects.Contract.ContractExe (ContractExe)
+import Plutus.PAB.Effects.Contract.Builtin (Builtin)
 import Plutus.PAB.Events.ContractInstanceState (PartiallyDecodedResponse)
 import Plutus.PAB.Webserver.Types (ChainReport, ContractReport, ContractSignatureResponse, _ChainReport, _ContractReport, _ContractSignatureResponse, CombinedWSStreamToClient, CombinedWSStreamToServer)
 import Schema (FormSchema)
@@ -67,7 +67,7 @@ data HAction
   = Init
   | ChangeView View
   | LoadFullReport
-  | ActivateContract ContractExe
+  | ActivateContract (Builtin a)
   | ChainAction Chain.Action
   | ClipboardAction Clipboard.Action
   | ChangeContractEndpointCall ContractInstanceId Int FormEvent
@@ -77,7 +77,7 @@ type ContractStates
   = Map ContractInstanceId (WebStreamData (PartiallyDecodedResponse PABReq /\ Array EndpointForm))
 
 type ContractSignatures
-  = Array (ContractSignatureResponse ContractExe)
+  = Array (ContractSignatureResponse (Builtin a))
 
 data WebSocketStatus
   = WebSocketOpen
@@ -185,7 +185,7 @@ _contractActiveEndpoints =
 _rqRequest :: forall t. Lens' (Request t) t
 _rqRequest = _Newtype <<< prop (SProxy :: SProxy "rqRequest")
 
-_contractPath :: Lens' ContractExe String
+_contractPath :: Lens' (Builtin a) String
 _contractPath = _Newtype <<< prop (SProxy :: SProxy "contractPath")
 
 _contractInstanceId :: Lens' ContractInstanceId JsonUUID

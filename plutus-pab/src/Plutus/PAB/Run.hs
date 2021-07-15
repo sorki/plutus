@@ -25,8 +25,9 @@ import           Control.Monad.Logger                (logErrorN, runStdoutLoggin
 import           Data.Aeson                          (FromJSON, ToJSON)
 import           Data.Foldable                       (for_)
 import           Data.Text.Extras                    (tshow)
+import           Data.Typeable                       (Typeable)
 import           Data.Yaml                           (decodeFileThrow)
-import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler)
+import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler, HasDefinitions)
 import           Plutus.PAB.Monitoring.Config        (defaultConfig, loadConfig)
 import           Plutus.PAB.Monitoring.PABLogMsg     (AppMsg (..))
 import           Plutus.PAB.Monitoring.Util          (PrettyObject (..), convertLog)
@@ -37,7 +38,18 @@ import           Prettyprinter                       (Pretty)
 import qualified Servant
 import           System.Exit                         (ExitCode (ExitFailure), exitSuccess, exitWith)
 
-runWith :: forall a. (Show a, Ord a, FromJSON a, ToJSON a, Pretty a, Servant.MimeUnrender Servant.JSON a) => BuiltinHandler a -> IO ()
+runWith :: forall a.
+    ( Show a
+    , Ord a
+    , FromJSON a
+    , ToJSON a
+    , Pretty a
+    , Servant.MimeUnrender Servant.JSON a
+    , Typeable a
+    , HasDefinitions a
+    )
+    => BuiltinHandler a
+    -> IO ()
 runWith userContractHandler = do
     AppOpts { minLogLevel, logConfigPath, runEkgServer, cmd, configPath, storageBackend } <- parseOptions
 

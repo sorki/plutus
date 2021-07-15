@@ -173,13 +173,11 @@ allInstanceStates = do
     let get (i, ContractActivationArgs{caWallet, caID}) = fromInternalState caID i caWallet . fromResp . Contract.serialisableState (Proxy @t) <$> Contract.getState @t i
     filter (isRunning . cicContract) <$> traverse get (Map.toList mp)
 
-availableContracts :: PABAction t env [ContractSignatureResponse (Contract.ContractDef t)]
-availableContracts = undefined -- TODO: Fix
--- availableContracts :: forall t env. Contract.PABContract t => PABAction t env [ContractSignatureResponse (Contract.ContractDef t)]
--- availableContracts = do
---     def <- Contract.getDefinitions @t
---     let mkSchema s = ContractSignatureResponse s <$> Contract.exportSchema @t s
---     traverse mkSchema def
+availableContracts :: forall t env. Contract.PABContract t => PABAction t env [ContractSignatureResponse (Contract.ContractDef t)]
+availableContracts = do
+    def <- Contract.getDefinitions @t
+    let mkSchema s = ContractSignatureResponse s <$> Contract.exportSchema @t s
+    traverse mkSchema def
 
 shutdown :: forall t env. ContractInstanceId -> PABAction t env ()
 shutdown = Core.stopInstance

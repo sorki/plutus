@@ -249,7 +249,9 @@
             (hsPkgs."plutus-pab" or (errorHandler.buildDepError "plutus-pab"))
             (hsPkgs."plutus-use-cases" or (errorHandler.buildDepError "plutus-use-cases"))
             (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
+            (hsPkgs."purescript-bridge" or (errorHandler.buildDepError "purescript-bridge"))
             (hsPkgs."row-types" or (errorHandler.buildDepError "row-types"))
+            (hsPkgs."servant-purescript" or (errorHandler.buildDepError "servant-purescript"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             ];
           buildable = true;
@@ -257,6 +259,7 @@
             "ContractExample"
             "ContractExample/AtomicSwap"
             "ContractExample/PayToWallet"
+            "ContractExample/WaitForTx"
             ];
           hsSourceDirs = [ "examples" ];
           mainPath = [ "Main.hs" ];

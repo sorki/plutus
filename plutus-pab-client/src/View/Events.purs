@@ -16,7 +16,6 @@ import Halogen.HTML (HTML, div_, h2_, text)
 import Ledger.Index (UtxoIndex)
 import Plutus.V1.Ledger.Tx (TxOut, TxOutRef)
 import Playground.Lenses (_utxoIndexEntries)
-import Plutus.PAB.Effects.Contract.ContractExe (ContractExe)
 import Types (HAction(..))
 import View.Pretty (class Pretty, pretty)
 

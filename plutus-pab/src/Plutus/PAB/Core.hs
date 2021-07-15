@@ -107,7 +107,8 @@ import qualified Plutus.PAB.Core.ContractInstance        as ContractInstance
 import           Plutus.PAB.Core.ContractInstance.STM    (Activity (Active), BlockchainEnv, InstancesState,
                                                           OpenEndpoint (..))
 import qualified Plutus.PAB.Core.ContractInstance.STM    as Instances
-import           Plutus.PAB.Effects.Contract             (ContractEffect, ContractStore, PABContract (..), getState)
+import           Plutus.PAB.Effects.Contract             (ContractDefinition, ContractEffect, ContractStore,
+                                                          PABContract (..), getState)
 import qualified Plutus.PAB.Effects.Contract             as Contract
 import qualified Plutus.PAB.Effects.ContractRuntime      as ContractRuntime
 import           Plutus.PAB.Effects.TimeEffect           (TimeEffect (..), systemTime)
@@ -132,6 +133,7 @@ import           Wallet.Types                            (ContractInstanceId, En
 type PABEffects t env =
     '[ ContractStore t
      , ContractEffect t
+     , ContractDefinition t
      , LogMsg (PABMultiAgentMsg t)
      , TimeEffect
      , Reader (PABEnvironment t env)
@@ -148,13 +150,14 @@ newtype PABRunner t env = PABRunner { runPABAction :: forall a. PABAction t env 
 -- | Get a 'PABRunner' that uses the current environment.
 pabRunner :: forall t env. PABAction t env (PABRunner t env)
 pabRunner = do
-    h@PABEnvironment{effectHandlers=EffectHandlers{handleLogMessages, handleContractStoreEffect, handleContractEffect}} <- ask @(PABEnvironment t env)
+    h@PABEnvironment{effectHandlers=EffectHandlers{handleLogMessages, handleContractStoreEffect, handleContractEffect, handleContractDefinitionEffect}} <- ask @(PABEnvironment t env)
     pure $ PABRunner $ \action -> do
         runM
             $ runError
             $ runReader h
             $ interpret (handleTimeEffect @t @env)
             $ handleLogMessages
+            $ handleContractDefinitionEffect
             $ handleContractEffect
             $ handleContractStoreEffect action
 
@@ -180,11 +183,11 @@ runPAB ::
     -> PABAction t env a
     -> IO (Either PABError a)
 runPAB endpointTimeout effectHandlers action = runM $ runError $ do
-    let EffectHandlers{initialiseEnvironment, onStartup, onShutdown, handleLogMessages, handleContractStoreEffect, handleContractEffect} = effectHandlers
+    let EffectHandlers{initialiseEnvironment, onStartup, onShutdown, handleLogMessages, handleContractStoreEffect, handleContractEffect, handleContractDefinitionEffect} = effectHandlers
     (instancesState, blockchainEnv, appEnv) <- initialiseEnvironment
     let env = PABEnvironment{instancesState, blockchainEnv, appEnv, effectHandlers, endpointTimeout}
 
-    runReader env $ interpret (handleTimeEffect @t @env) $ handleLogMessages $ handleContractEffect $ handleContractStoreEffect $ do
+    runReader env $ interpret (handleTimeEffect @t @env) $ handleLogMessages $ handleContractDefinitionEffect $ handleContractEffect $ handleContractStoreEffect $ do
         onStartup
         result <- action
         onShutdown
@@ -362,16 +365,16 @@ data EffectHandlers t env =
             => Eff (ContractEffect t ': effs)
             ~> Eff effs
 
-        -- -- | Handle the 'ContractDefinitionStore' effect
-        -- , handleContractDefinitionStoreEffect :: forall effs.
-        --     ( Member (Reader (PABEnvironment t env)) effs
-        --     , Member (Error PABError) effs
-        --     , Member TimeEffect effs
-        --     , Member (LogMsg (PABMultiAgentMsg t)) effs
-        --     , LastMember IO effs
-        --     )
-        --     => Eff (ContractDefinitionStore t ': effs)
-        --     ~> Eff effs
+        -- | Handle the 'ContractDefinition' effect
+        , handleContractDefinitionEffect :: forall effs.
+            ( Member (Reader (PABEnvironment t env)) effs
+            , Member (Error PABError) effs
+            , Member TimeEffect effs
+            , Member (LogMsg (PABMultiAgentMsg t)) effs
+            , LastMember IO effs
+            )
+            => Eff (ContractDefinition t ': effs)
+            ~> Eff effs
 
         -- | Handle effects that serve requests to external services managed by the PAB
         --   Runs in the context of a particular wallet.

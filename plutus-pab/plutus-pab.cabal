@@ -92,7 +92,6 @@ library
         Plutus.PAB.Core.ContractInstance.RequestHandlers
         Plutus.PAB.Core.ContractInstance.STM
         Plutus.PAB.Db.Beam
-        Plutus.PAB.Db.Beam.ContractDefinitionStore
         Plutus.PAB.Db.Beam.ContractStore
         Plutus.PAB.Db.Memory.ContractStore
         Plutus.PAB.Effects.Contract
@@ -136,80 +135,6 @@ library
         , plutus-tx-plugin
 
     build-depends:
-        -- QuickCheck -any,
-        -- aeson -any,
-        -- aeson-pretty -any,
-        -- async -any,
-        -- base >=4.7 && <5,
-        -- bytestring -any,
-        -- cardano-api -any,
-        -- cardano-crypto -any,
-        -- cardano-prelude -any,
-        -- cardano-slotting -any,
-        -- containers -any,
-        -- contra-tracer -any,
-        -- cryptonite -any,
-        -- cborg -any,
-        -- directory -any,
-        -- errors -any,
-        -- freer-simple -any,
-        -- generic-arbitrary -any,
-        -- http-client -any,
-        -- http-client-tls -any,
-        -- http-types -any,
-        -- io-sim-classes -any,
-        -- lens -any,
-        -- memory -any,
-        -- monad-logger -any,
-        -- mtl -any,
-        -- network -any,
-        -- network-mux -any,
-        -- newtype-generics -any,
-        -- nothunks -any,
-        -- optparse-applicative -any,
-        -- ouroboros-network -any,
-        -- ouroboros-network-framework -any,
-        -- playground-common -any,
-        -- plutus-ledger-api -any,
-        -- prettyprinter >=1.1.0.1,
-        -- process -any,
-        -- quickcheck-instances -any,
-        -- random -any,
-        -- row-types -any,
-        -- scientific -any,
-        -- serialise -any,
-        -- servant -any,
-        -- servant-client -any,
-        -- servant-server -any,
-        -- swagger2 -any,
-        -- tagged -any,
-        -- typed-protocols -any,
-        -- typed-protocols-examples -any,
-        -- servant-websockets -any,
-        -- stm -any,
-        -- text -any,
-        -- transformers -any,
-        -- unliftio-core -any,
-        -- unordered-containers -any,
-        -- uuid -any,
-        -- vector -any,
-        -- warp -any,
-        -- Win32-network -any,
-        -- websockets -any,
-        -- yaml -any,
-        -- mwc-random -any,
-        -- primitive -any,
-        -- hedgehog -any,
-        -- iohk-monitoring -any,
-        -- lobemo-backend-ekg -any,
-        -- exceptions -any,
-        -- data-default -any,
-        -- time -any,
-        -- time-units -any,
-        -- beam-core -any,
-        -- beam-sqlite -any,
-        -- beam-migrate -any,
-        -- sqlite-simple -any
         , aeson
         , aeson-pretty
         , async
@@ -300,38 +225,6 @@ executable plutus-pab-setup
         -Wno-missing-import-lists -Wredundant-constraints -O0
 
     build-depends:
-        -- aeson -any,
-        -- aeson-pretty -any,
-        -- async -any,
-        -- base >=4.9 && <5,
-        -- bytestring -any,
-        -- filepath -any,
-        -- freer-extras -any,
-        -- freer-simple -any,
-        -- lens -any,
-        -- monad-logger -any,
-        -- mtl -any,
-        -- optparse-applicative -any,
-        -- playground-common -any,
-        -- plutus-pab,
-        -- plutus-ledger -any,
-        -- plutus-contract -any,
-        -- plutus-use-cases -any,
-        -- prettyprinter >=1.1.0.1,
-        -- purescript-bridge -any,
-        -- row-types -any,
-        -- servant-purescript -any,
-        -- servant-server -any,
-        -- text -any,
-        -- time-units -any,
-        -- unliftio-core -any,
-        -- uuid -any,
-        -- yaml -any,
-        -- containers -any,
-        -- iohk-monitoring -any,
-        -- servant-client -any,
-        -- contra-tracer -any,
-        -- lobemo-backend-ekg -any
         , aeson
         , aeson-pretty
         , async
@@ -392,7 +285,9 @@ executable plutus-pab-examples
         , plutus-pab
         , plutus-use-cases
         , prettyprinter
+        , purescript-bridge
         , row-types
+        , servant-purescript
         , text
 
 executable plutus-uniswap

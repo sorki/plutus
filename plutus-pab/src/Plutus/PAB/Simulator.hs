@@ -213,10 +213,10 @@ mkSimulatorHandlers handleContractEffect =
         , handleContractEffect
         , handleLogMessages = handleLogSimulator @t
         , handleServicesEffects = handleServicesSimulator @t
-        -- , handleContractDefinitionStoreEffect =
-        --     interpret $ \case
-        --         Contract.AddDefinition _ -> pure () -- not supported
-        --         Contract.GetDefinitions  -> pure definitions
+        , handleContractDefinitionEffect =
+            interpret $ \case
+                Contract.AddDefinition _ -> pure () -- not supported
+                Contract.GetDefinitions  -> pure [] -- definitions
         , onStartup = do
             SimulatorState{_logMessages} <- Core.askUserEnv @t @(SimulatorState t)
             void $ liftIO $ forkIO (printLogMessages _logMessages)

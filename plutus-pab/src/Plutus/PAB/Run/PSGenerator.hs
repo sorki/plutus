@@ -11,6 +11,7 @@
 
 module Plutus.PAB.Run.PSGenerator
     ( generate
+    , generateAPIModule
     , pabBridge
     , pabTypes
     ) where
@@ -35,6 +36,8 @@ import           Plutus.Contract.Checkpoint                 (CheckpointKey, Chec
 import           Plutus.Contract.Effects                    (TxConfirmed)
 import           Plutus.Contract.Resumable                  (Responses)
 import           Plutus.PAB.Effects.Contract.Builtin        (Builtin)
+-- import           Plutus.PAB.Effects.Contract.ContractExe    (ContractExe)
+import           Data.Typeable                              (Typeable)
 import           Plutus.PAB.Events.ContractInstanceState    (PartiallyDecodedResponse)
 import qualified Plutus.PAB.Webserver.API                   as API
 import           Plutus.PAB.Webserver.Types                 (ChainReport, CombinedWSStreamToClient,
@@ -127,33 +130,25 @@ mySettings =
         {_generateSubscriberAPI = False}
 
 ------------------------------------------------------------
-generate :: FilePath -> IO ()
-generate outputDir = do
+-- | Use the Proxy for specifying `a` when generating PS functions for the
+-- webserver using a specific Builtin (ex. 'Builtin Marlowe' instead of
+-- 'Builtin a').
+generateAPIModule :: forall a. (Typeable a) => Proxy a -> FilePath -> IO ()
+generateAPIModule _ outputDir = do
     writeAPIModuleWithSettings
         mySettings
         outputDir
         pabBridgeProxy
-        (Proxy @(API.API (Builtin A) :<|> API.NewAPI (Builtin A) Text.Text :<|> API.WalletProxy Text.Text))
+        (    Proxy @(API.API (Builtin a)
+        :<|> API.NewAPI (Builtin a) Text.Text
+        :<|> API.WalletProxy Text.Text)
+        )
+
+generate :: FilePath -> IO ()
+generate outputDir = do
     writePSTypesWith
         (genForeign (ForeignOptions {unwrapSingleConstructors = True}))
         outputDir
         (buildBridge pabBridge)
         pabTypes
     putStrLn $ "Done: " <> outputDir
-
--- -- Before, try to use (Builtin A)
--- generateAPIModule :: Proxy a => FilePath -> IO ()
--- generateAPIModule outputDir = do
---     writeAPIModuleWithSettings
---         mySettings
---         outputDir
---         pabBridgeProxy
---         (Proxy @(API.API (Builtin A) :<|> API.NewAPI ContractExe Text.Text :<|> API.WalletProxy Text.Text))
-
--- -- Expose in Main.hs
--- generate writePSTypesWith
---         (genForeign (ForeignOptions {unwrapSingleConstructors = True}))
---         outputDir
---         (buildBridge pabBridge)
---         pabTypes
---     putStrLn $ "Done: " <> outputDir

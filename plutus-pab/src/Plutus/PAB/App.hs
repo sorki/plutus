@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -15,6 +16,7 @@
 
 {-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 
+{-# LANGUAGE TypeOperators         #-}
 module Plutus.PAB.App(
     App,
     runApp,
@@ -57,7 +59,8 @@ import           Plutus.PAB.Db.Memory.ContractStore             (InMemInstances,
 -- TODO: Use this or delete it
 import           Data.Aeson                                     (FromJSON, ToJSON)
 import qualified Plutus.PAB.Db.Memory.ContractStore             as InMem
-import           Plutus.PAB.Effects.Contract.Builtin            (Builtin, BuiltinHandler (..))
+import           Plutus.PAB.Effects.Contract                    (ContractDefinition (..))
+import           Plutus.PAB.Effects.Contract.Builtin            (Builtin, BuiltinHandler (..), HasDefinitions (..))
 import           Plutus.PAB.Effects.DbStore                     (checkedSqliteDb, handleDbStore)
 import           Plutus.PAB.Monitoring.Monitoring               (handleLogMsgTrace)
 import           Plutus.PAB.Monitoring.PABLogMsg                (PABLogMsg (..), PABMultiAgentMsg (UserLog))
@@ -84,15 +87,14 @@ data AppEnv a =
 
 appEffectHandlers
   :: forall a.
-  ( --Member (LogMsg Plutus.PAB.Monitoring.PABLogMsg.ContractExeLogMsg) effs
-  -- , Member (LogMsg (PABMultiAgentMsg (Builtin a))) effs
-    FromJSON a
+  ( FromJSON a
   , ToJSON a
+  , HasDefinitions a
   )
   => StorageBackend
   -> Config
   -> Trace IO (PABLogMsg (Builtin a))
-  -> BuiltinHandler a -- (ContractEffect (Builtin a) ~> Eff effs)
+  -> BuiltinHandler a
   -> EffectHandlers (Builtin a) (AppEnv a)
 appEffectHandlers storageBackend config trace BuiltinHandler{contractHandler} =
     EffectHandlers
@@ -127,13 +129,13 @@ appEffectHandlers storageBackend config trace BuiltinHandler{contractHandler} =
               . interpret (handleDbStore trace)
               . reinterpretN @'[_, _, _, _] BeamEff.handleContractStore
 
-        -- , handleContractDefinitionStoreEffect =
-        --     interpret (handleLogMsgTrace trace)
-        --     . reinterpret (mapLog @_ @(PABLogMsg (Builtin a)) SMultiAgent)
-        --     . interpret (Core.handleUserEnvReader @(Builtin a) @(AppEnv a))
-        --     . interpret (Core.handleMappedReader @(AppEnv a) dbConnection)
-        --     . interpret (handleDbStore trace)
-        --     . reinterpretN @'[_, _, _, _] BeamEff.handleContractDefinitionStore
+        , handleContractDefinitionEffect =
+            interpret (handleLogMsgTrace trace)
+            . reinterpret (mapLog @_ @(PABLogMsg (Builtin a)) SMultiAgent)
+            . interpret (Core.handleUserEnvReader @(Builtin a) @(AppEnv a))
+            . interpret (Core.handleMappedReader @(AppEnv a) dbConnection)
+            . interpret (handleDbStore trace)
+            . reinterpretN @'[_, _, _, _] handleContractDefinition
 
         , handleServicesEffects = \wallet ->
             -- handle 'NodeClientEffect'
@@ -168,10 +170,11 @@ runApp ::
     forall a b.
     ( FromJSON a
     , ToJSON a
+    , HasDefinitions a
     )
     => StorageBackend
     -> Trace IO (PABLogMsg (Builtin a)) -- ^ Top-level tracer
-    -> BuiltinHandler a -- (ContractEffect (Builtin a) ~> Eff effs)
+    -> BuiltinHandler a
     -> Config -- ^ Client configuration
     -> App a b -- ^ Action
     -> IO (Either PABError b)
@@ -215,8 +218,7 @@ migrate trace config = do
     runBeamMigration trace connection
 
 runBeamMigration
-  ::
-  Trace IO (PABLogMsg (Builtin a))
+  :: Trace IO (PABLogMsg (Builtin a))
   -> Sqlite.Connection
   -> IO ()
 runBeamMigration trace conn = Sqlite.runBeamSqliteDebug (logDebugString trace . pack) conn $ do
@@ -227,3 +229,11 @@ dbConnect :: Trace IO (PABLogMsg (Builtin a)) -> DbConfig -> IO Sqlite.Connectio
 dbConnect trace DbConfig {dbConfigFile} = do
   logDebugString trace $ "Connecting to DB: " <> dbConfigFile
   open (unpack dbConfigFile)
+
+handleContractDefinition ::
+  forall a effs. HasDefinitions a
+  => ContractDefinition (Builtin a)
+  ~> Eff effs
+handleContractDefinition = \case
+  AddDefinition _ -> pure ()
+  GetDefinitions  -> pure getDefinitions

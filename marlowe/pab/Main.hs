@@ -11,7 +11,6 @@ module Main(main, marloweTest) where
 
 import           Control.Monad                       (guard, void)
 import           Control.Monad.Freer                 (interpret)
-import           Control.Monad.IO.Class              (MonadIO (..))
 import           Data.Aeson                          (FromJSON (..), ToJSON (..), object, withObject, (.:), (.=))
 import qualified Data.Aeson                          as JSON
 import           Data.Aeson.Types                    (prependFailure)
@@ -27,8 +26,10 @@ import qualified Language.Marlowe.Semantics          as Marlowe
 import           Language.Marlowe.Util               (ada)
 import           Ledger                              (PubKeyHash, Slot, pubKeyHash)
 import qualified Ledger.Value                        as Val
-import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler (contractHandler), SomeBuiltin (..))
+import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler (contractHandler), HasDefinitions (..),
+                                                      SomeBuiltin (..))
 import qualified Plutus.PAB.Effects.Contract.Builtin as Builtin
+import           Plutus.PAB.Run                      (runWith)
 import           Plutus.PAB.Simulator                (SimulatorEffectHandlers)
 import qualified Plutus.PAB.Simulator                as Simulator
 import qualified Plutus.PAB.Webserver.Server         as PAB.Server
@@ -36,11 +37,7 @@ import qualified PlutusTx.AssocMap                   as AssocMap
 import           Text.Read                           (readMaybe)
 
 main :: IO ()
-main = void $ Simulator.runSimulationWith handlers $ do
-    Simulator.logString @(Builtin Marlowe) "Starting marlowe PAB webserver on port 8080. Press enter to exit."
-    shutdown <- PAB.Server.startServerDebug
-    void $ liftIO getLine
-    shutdown
+main = runWith (Builtin.handleBuiltin @Marlowe)
 
 marloweTest :: IO ()
 marloweTest = void $ Simulator.runSimulationWith handlers $ do
@@ -121,8 +118,12 @@ instance FromJSON Marlowe where
 
 instance Pretty Marlowe where
     pretty = viaShow
-handleMarloweContract :: BuiltinHandler Marlowe
-handleMarloweContract = Builtin.handleBuiltin getSchema getContract where
+
+instance HasDefinitions Marlowe where
+    getDefinitions = [ MarloweApp
+                     , WalletCompanion
+                     , MarloweFollower
+                     ]
     getSchema = const [] -- TODO: replace with proper schemas using Builtin.endpointsToSchemas (missing some instances currently)
     getContract = \case
         MarloweApp      -> SomeBuiltin Marlowe.marlowePlutusContract
@@ -132,4 +133,4 @@ handleMarloweContract = Builtin.handleBuiltin getSchema getContract where
 handlers :: SimulatorEffectHandlers (Builtin Marlowe)
 handlers =
     Simulator.mkSimulatorHandlers @(Builtin Marlowe)
-    $ interpret (contractHandler handleMarloweContract)
+    $ interpret (contractHandler Builtin.handleBuiltin)

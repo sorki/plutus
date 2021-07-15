@@ -8,6 +8,7 @@ makeTest {
       environment.systemPackages = with pkgs; [ curl ];
       services.pab = {
         enable = true;
+        pab-setup = plutus-pab.pab-exes.plutus-pab-setup;
         pab-package = plutus-pab.pab-exes.plutus-pab-examples;
         staticContent = marlowe-dashboard.client;
         dbFile = "/var/lib/pab/pab-core.db";

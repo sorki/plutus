@@ -44,6 +44,7 @@ import           Data.Proxy                          (Proxy (..))
 import qualified Data.Set                            as Set
 import qualified Data.Text                           as Text
 import           Data.Time.Units                     (Second)
+import           Data.Typeable                       (Typeable)
 import           Plutus.Contract.Resumable           (responses)
 import           Plutus.Contract.State               (State (..))
 import qualified Plutus.Contract.State               as State
@@ -51,7 +52,7 @@ import qualified Plutus.PAB.App                      as App
 import qualified Plutus.PAB.Core                     as Core
 import qualified Plutus.PAB.Db.Beam                  as Beam
 import qualified Plutus.PAB.Effects.Contract         as Contract
-import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler)
+import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler, HasDefinitions)
 import qualified Plutus.PAB.Monitoring.Monitoring    as LM
 import           Plutus.PAB.Run.Command
 import qualified Plutus.PAB.Run.PSGenerator          as PSGenerator
@@ -73,7 +74,8 @@ runNoConfigCommand trace = \case
         App.migrate (LM.convertLog LM.PABMsg trace) conf
 
     -- Generate PureScript bridge code
-    PSGenerator {outputDir} -> PSGenerator.generate outputDir
+    PSGenerator {psGenOutputDir} -> do
+        PSGenerator.generate psGenOutputDir
 
     -- Get default logging configuration
     WriteDefaultConfig{outputFile} -> LM.defaultConfig >>= flip CM.exportConfiguration outputFile
@@ -94,8 +96,9 @@ runConfigCommand :: forall a.
     , ToJSON a
     , FromJSON a
     , Show a
-    -- , Servant.MimeUnrender Servant.JSON (Contract.ContractDef (Builtin a))
     , Servant.MimeUnrender Servant.JSON a
+    , Typeable a
+    , HasDefinitions a
     )
     => BuiltinHandler a -- (ContractEffect (Builtin a) ~> Eff effs)
     -> ConfigCommandArgs a
@@ -199,6 +202,9 @@ runConfigCommand _ ConfigCommandArgs{ccaTrace, ccaPABConfig=Config{dbConfig}} (R
             drainLog
                 where
                     logStep response = logInfo @(LM.AppMsg (Builtin a)) $ LM.ContractHistoryItem contractInstanceId (snd <$> response)
+
+runConfigCommand _ _ PSApiGenerator {psApiGenOutputDir} =
+    PSGenerator.generateAPIModule (Proxy @a) psApiGenOutputDir
 
 toPABMsg :: Trace m (LM.AppMsg (Builtin a)) -> Trace m (LM.PABLogMsg (Builtin a))
 toPABMsg = LM.convertLog LM.PABMsg

@@ -1,9 +1,9 @@
 'use strict';
 
-const contracts = require('/contracts/contracts.json');
+// const contracts = require('/contracts/contracts.json');
 
-exports.marloweAppPath_ = contracts.marlowe;
+exports.marloweAppPath_ = ""; // contracts.marlowe;
 
-exports.walletCompanionPath_ = contracts.walletCompanion;
+exports.walletCompanionPath_ = ""; //contracts.walletCompanion;
 
-exports.marloweFollowerPath_ = contracts.walletFollower;
+exports.marloweFollowerPath_ = ""; //contracts.walletFollower;

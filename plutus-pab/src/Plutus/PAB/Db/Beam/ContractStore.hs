@@ -33,7 +33,7 @@ import qualified Data.Text.Encoding                  as Text
 import           Data.UUID                           (fromText, toText)
 import           Database.Beam                       hiding (updateRow)
 import           Plutus.PAB.Effects.Contract         (ContractStore (..), PABContract (..))
-import           Plutus.PAB.Effects.Contract.Builtin (Builtin, getResponse)
+import           Plutus.PAB.Effects.Contract.Builtin (Builtin, fromResponse, getResponse)
 import           Plutus.PAB.Effects.DbStore          hiding (ContractInstanceId)
 import           Plutus.PAB.Types                    (PABError (..))
 import           Plutus.PAB.Webserver.Types          (ContractActivationArgs (..))
@@ -111,14 +111,13 @@ handleContractStore = \case
 
   GetState instanceId -> do
     -- TODO: https://jira.iohk.io/browse/SCP-2126
-    -- let decodeText = decode . toLazyByteString . encodeUtf8Builder
-    let decodeText = undefined
+    let decodeText = decode . toLazyByteString . encodeUtf8Builder
         extractState = \case
           Nothing -> throwError $ ContractInstanceNotFound instanceId
           Just  c ->
             maybe (throwError $ ContractStateNotFound instanceId)
                   pure
-                  (_contractInstanceState c >>= decodeText)
+                  (_contractInstanceState c >>= decodeText >>= fromResponse)
 
     join
       $ fmap extractState

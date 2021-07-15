@@ -79,6 +79,13 @@ in
       '';
     };
 
+    pab-setup = mkOption {
+      type = types.package;
+      description = ''
+        The pab setup script to execute.
+      '';
+    };
+
     pab-package = mkOption {
       type = types.package;
       description = ''
@@ -192,7 +199,7 @@ in
           rm -rf ${cfg.dbFile}
 
           echo "[pab-init-cmd]: Creating new DB '${cfg.dbFile}'"
-          ${cfg.pab-package}/bin/plutus-pab-setup migrate ${cfg.dbFile}
+          ${cfg.pab-setup}/bin/plutus-pab-setup migrate ${cfg.dbFile}
         '';
       in
       {
