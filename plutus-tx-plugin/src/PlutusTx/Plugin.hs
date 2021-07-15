@@ -53,6 +53,7 @@ import           ErrorCode
 import qualified FamInstEnv                    as GHC
 import           Text.Read                     (readMaybe)
 
+import           System.IO                     (openTempFile)
 import           System.IO.Unsafe              (unsafePerformIO)
 
 data PluginOptions = PluginOptions {
@@ -60,6 +61,7 @@ data PluginOptions = PluginOptions {
     , poDeferErrors             :: Bool
     , poContextLevel            :: Int
     , poDumpPir                 :: Bool
+    , poDumpPirFlat             :: Bool
     , poDumpPlc                 :: Bool
     , poOptimize                :: Bool
     , poMaxSimplifierIterations :: Int
@@ -128,6 +130,7 @@ parsePluginArgs args = do
             , poDeferErrors = elem "defer-errors" args
             , poContextLevel = if elem "no-context" args then 0 else if elem "debug-context" args then 3 else 1
             , poDumpPir = elem "dump-pir" args
+            , poDumpPirFlat = elem "dump-pir-flat" args
             , poDumpPlc = elem "dump-plc" args
             , poOptimize = notElem "dont-optimize" args
             , poMaxSimplifierIterations = maxIterations
@@ -338,6 +341,14 @@ runCompiler opts expr = do
 
     -- GHC.Core -> Pir translation.
     pirT <- PIR.runDefT () $ compileExprWithDefs expr
+
+    -- dumping binary pir
+    -- NOTE:  consider doing it after simplification
+    when (poDumpPirFlat opts) . liftIO $ do
+      let fpirT = flat pirT
+      (tPath, tHandle) <- openTempFile "." "pir-term.flat"
+      putStrLn $ "!!! dumping binary pir term to" ++ show tPath
+      BS.hPut tHandle fpirT
 
     -- Pir -> (Simplified) Pir pass. We can then dump/store a more legible PIR program.
     spirT <- flip runReaderT pirCtx $ PIR.compileToReadable pirT
