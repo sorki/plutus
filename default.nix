@@ -63,12 +63,12 @@ rec {
     }) client server generate-purescript start-backend;
   });
 
-  marlowe-playground = pkgs.recurseIntoAttrs rec {
+  marlowe-playground = noCross (pkgs.recurseIntoAttrs rec {
     inherit (pkgs.callPackage ./marlowe-playground-client {
       inherit (plutus.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit haskell webCommon webCommonMarlowe webCommonPlayground;
     }) client server generate-purescript start-backend;
-  };
+  });
 
   marlowe-dashboard = noCross (pkgs.recurseIntoAttrs rec {
     inherit (pkgs.callPackage ./marlowe-dashboard-client {
@@ -95,10 +95,10 @@ rec {
 
   marlowe-web = pkgs.callPackage ./marlowe-website { inherit (plutus.lib) npmlock2nix gitignore-nix; };
 
-  plutus-pab = pkgs.recurseIntoAttrs (pkgs.callPackage ./plutus-pab-client {
+  plutus-pab = noCross (pkgs.recurseIntoAttrs (pkgs.callPackage ./plutus-pab-client {
     inherit (plutus.lib) buildPursPackage buildNodeModules gitignore-nix filterNpm;
     inherit haskell webCommon webCommonPlutus;
-  });
+  }));
 
   tests = import ./nix/tests/default.nix {
     inherit pkgs docs;
