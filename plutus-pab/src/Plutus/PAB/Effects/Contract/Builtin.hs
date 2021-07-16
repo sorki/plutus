@@ -23,6 +23,7 @@ module Plutus.PAB.Effects.Contract.Builtin(
     Builtin
     , ContractConstraints
     , SomeBuiltin(..)
+    , SomeBuiltinState(..)
     , BuiltinContract(..)
     , BuiltinHandler(..)
     , handleBuiltin
@@ -35,6 +36,8 @@ module Plutus.PAB.Effects.Contract.Builtin(
     , getResponse
     , fromResponse
     , HasDefinitions(..)
+    , initBuiltin
+    , updateBuiltin
     ) where
 
 import           Control.Monad.Freer

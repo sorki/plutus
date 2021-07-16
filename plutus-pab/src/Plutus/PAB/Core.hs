@@ -38,10 +38,12 @@ module Plutus.PAB.Core
     , PABAction
     , EffectHandlers(..)
     , runPAB
+    , runPAB'
     , PABEnvironment(appEnv)
     -- * Contracts and instances
     , reportContractState
     , activateContract
+    , activateContract'
     , callEndpointOnInstance
     , callEndpointOnInstance'
     , payToPublicKey
@@ -102,7 +104,7 @@ import           Ledger.Tx                               (Address, Tx)
 import           Ledger.TxId                             (TxId)
 import           Ledger.Value                            (Value)
 import           Plutus.Contract.Effects                 (ActiveEndpoint (..), PABReq, TxConfirmed)
-import           Plutus.PAB.Core.ContractInstance        (ContractInstanceMsg)
+import           Plutus.PAB.Core.ContractInstance        (ContractInstanceMsg, ContractInstanceState (..))
 import qualified Plutus.PAB.Core.ContractInstance        as ContractInstance
 import           Plutus.PAB.Core.ContractInstance.STM    (Activity (Active), BlockchainEnv, InstancesState,
                                                           OpenEndpoint (..))
@@ -192,6 +194,34 @@ runPAB endpointTimeout effectHandlers action = runM $ runError $ do
         result <- action
         onShutdown
         pure result
+
+-- | Run a PABAction in the context of the given environment.
+-- TODO: Clean it up so there is less duplication of the above.
+runPAB' ::
+    forall t env a.
+    PABEnvironment t env
+    -> PABAction t env a
+    -> IO (Either PABError a)
+runPAB' env@PABEnvironment{effectHandlers} action = runM $ runError $ do
+    let EffectHandlers{onStartup, onShutdown, handleLogMessages, handleContractStoreEffect, handleContractEffect} = effectHandlers
+
+    runReader env $ interpret (handleTimeEffect @t @env) $ handleLogMessages $ handleContractEffect $ handleContractStoreEffect $ do
+        onStartup
+        result <- action
+        onShutdown
+        pure result
+
+-- | Start a new instance of a contract, with a given state.
+activateContract' :: forall t env. PABContract t => ContractInstanceState t -> ContractInstanceId -> Wallet -> ContractDef t -> PABAction t env ContractInstanceId
+activateContract' state cid w def = do
+    PABRunner{runPABAction} <- pabRunner
+
+    let handler :: forall a. Eff (ContractInstanceEffects t env '[IO]) a -> IO a
+        handler x = fmap (either (error . show) id) (runPABAction $ handleAgentThread w x)
+        args :: ContractActivationArgs (ContractDef t)
+        args = ContractActivationArgs{caWallet = w, caID = def}
+    handleAgentThread w
+        $ ContractInstance.activateContractSTM' @t @IO @(ContractInstanceEffects t env '[IO]) state cid handler args
 
 -- | Start a new instance of a contract
 activateContract :: forall t env. PABContract t => Wallet -> ContractDef t -> PABAction t env ContractInstanceId

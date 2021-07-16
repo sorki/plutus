@@ -20,52 +20,56 @@ module Plutus.PAB.Run.Cli (ConfigCommandArgs(..), runConfigCommand, runNoConfigC
 -- Command interpretation
 -----------------------------------------------------------------------------------------------------------------------
 
-import           Cardano.BM.Configuration            (Configuration)
-import qualified Cardano.BM.Configuration.Model      as CM
-import           Cardano.BM.Data.Trace               (Trace)
-import qualified Cardano.ChainIndex.Server           as ChainIndex
-import qualified Cardano.Metadata.Server             as Metadata
-import qualified Cardano.Node.Server                 as NodeServer
-import           Cardano.Node.Types                  (MockServerConfig (..))
-import qualified Cardano.Wallet.Server               as WalletServer
+import           Cardano.BM.Configuration             (Configuration)
+import qualified Cardano.BM.Configuration.Model       as CM
+import           Cardano.BM.Data.Trace                (Trace)
+import qualified Cardano.ChainIndex.Server            as ChainIndex
+import qualified Cardano.Metadata.Server              as Metadata
+import qualified Cardano.Node.Server                  as NodeServer
+import           Cardano.Node.Types                   (MockServerConfig (..))
+import qualified Cardano.Wallet.Server                as WalletServer
 import           Cardano.Wallet.Types
-import           Control.Concurrent                  (takeMVar)
-import           Control.Concurrent.Async            (Async, async, waitAny)
-import           Control.Concurrent.Availability     (Availability, starting)
-import           Control.Monad                       (forM_, void)
-import           Control.Monad.Freer                 (Eff, Member, interpret)
-import           Control.Monad.Freer.Delay           (DelayEffect, delayThread)
-import           Control.Monad.Freer.Extras.Log      (logInfo)
-import           Control.Monad.IO.Class              (liftIO)
-import           Data.Aeson                          (FromJSON, Result (..), ToJSON, Value, fromJSON)
-import           Data.Foldable                       (foldl', traverse_)
-import qualified Data.Map                            as Map
-import           Data.Proxy                          (Proxy (..))
-import qualified Data.Set                            as Set
-import qualified Data.Text                           as Text
-import           Data.Time.Units                     (Second)
 import           Data.Typeable                       (Typeable)
-import           Plutus.Contract.Resumable           (responses, rspResponse)
 import           Plutus.Contract                     (Contract)
 import           Plutus.Contract.State               (ContractResponse, State (..))
-import qualified Plutus.Contract.State               as State
-import qualified Plutus.PAB.App                      as App
-import qualified Plutus.PAB.Core                     as Core
-import qualified Plutus.PAB.Db.Beam                  as Beam
-import qualified Plutus.PAB.Effects.Contract         as Contract
-import           Plutus.PAB.Effects.Contract.Builtin (Builtin, HasDefinitions, BuiltinHandler,
-                                                      ContractConstraints, SomeBuiltin (..), getResponse)
-import qualified Plutus.PAB.Monitoring.Monitoring    as LM
+import           Control.Concurrent                   (takeMVar)
+import           Control.Concurrent.Async             (Async, async, waitAny)
+import           Control.Concurrent.Availability      (Availability, starting)
+import qualified Control.Concurrent.STM               as STM
+import           Control.Monad                        (forM, forM_, void)
+import           Control.Monad.Freer                  (Eff, LastMember, Member, interpret)
+import           Control.Monad.Freer.Delay            (DelayEffect, delayThread)
+import           Control.Monad.Freer.Error            (Error, throwError)
+import           Control.Monad.Freer.Extras.Log       (LogMsg (..), logInfo)
+import           Control.Monad.Freer.Reader           (ask, runReader)
+import           Control.Monad.IO.Class               (liftIO)
+import           Data.Aeson                           (FromJSON, Result (..), ToJSON, fromJSON)
+import           Data.Foldable                        (foldlM, traverse_)
+import qualified Data.Map                             as Map
+import           Data.Proxy                           (Proxy (..))
+import qualified Data.Set                             as Set
+import qualified Data.Text                            as Text
+import           Data.Time.Units                      (Second)
+import           Plutus.Contract.Resumable            (responses, rspResponse)
+import           Plutus.Contract.State                (State (..))
+import qualified Plutus.Contract.State                as State
+import qualified Plutus.PAB.App                       as App
+import qualified Plutus.PAB.Core                      as Core
+import           Plutus.PAB.Core.ContractInstance     (ContractInstanceState (..), updateState)
+import           Plutus.PAB.Core.ContractInstance.STM (InstanceState, emptyInstanceState)
+import qualified Plutus.PAB.Db.Beam                   as Beam
+import qualified Plutus.PAB.Effects.Contract          as Contract
+import           Plutus.PAB.Effects.Contract.Builtin  (Builtin, HasDefinitions, BuiltinHandler, SomeBuiltin (..),
+                                                       SomeBuiltinState (..), getResponse, initBuiltin, updateBuiltin)
+import qualified Plutus.PAB.Monitoring.Monitoring     as LM
 import           Plutus.PAB.Run.Command
-import qualified Plutus.PAB.Run.PSGenerator          as PSGenerator
-import           Plutus.PAB.Types                    (Config (..), DbConfig (..), chainIndexConfig,
-                                                      metadataServerConfig, nodeServerConfig, walletServerConfig)
-import qualified Plutus.PAB.Webserver.Server         as PABServer
-import           Plutus.PAB.Webserver.Types          (ContractActivationArgs (..))
+import qualified Plutus.PAB.Run.PSGenerator           as PSGenerator
+import           Plutus.PAB.Types                     (Config (..), DbConfig (..), PABError (..), chainIndexConfig,
+                                                       metadataServerConfig, nodeServerConfig, walletServerConfig)
+import qualified Plutus.PAB.Webserver.Server          as PABServer
+import           Plutus.PAB.Webserver.Types           (ContractActivationArgs (..))
 import qualified Servant
-
-import           Plutus.Contract.Effects             (PABReq (..))
-import qualified Plutus.Trace.Emulator.Types         as Emulator
+import qualified Wallet.Types                         as Wallet
 
 runNoConfigCommand ::
     Trace IO (LM.AppMsg (Builtin a))  -- ^ PAB Tracer logging instance
@@ -138,29 +142,39 @@ runConfigCommand _ ConfigCommandArgs{ccaTrace, ccaPABConfig = Config {metadataSe
 -- Run PAB webserver
 runConfigCommand contractHandler ConfigCommandArgs{ccaTrace, ccaPABConfig=config@Config{pabWebserverConfig, dbConfig}, ccaAvailability, ccaStorageBackend} PABWebserver =
   do
-    -- Restore the running contracts
     connection <- App.dbConnect (LM.convertLog LM.PABMsg ccaTrace) dbConfig
 
-    void
-        $ Beam.runBeamStoreAction connection (LM.convertLog LM.PABMsg ccaTrace)
+    -- Restore the running contracts by first collecting up enough details about the
+    -- previous contracts to re-start them
+    previousContracts <-
+        Beam.runBeamStoreAction connection (LM.convertLog LM.PABMsg ccaTrace)
         $ interpret (LM.handleLogMsgTrace ccaTrace)
         $ do
             cIds   <- Map.toList <$> Contract.getActiveContracts @(Builtin a)
-            forM_ cIds $ \(cid, args) -> do
+            forM cIds $ \(cid, args) -> do
                 s <- Contract.getState @(Builtin a) cid
                 let cd = contractDefinition @a (caID args)
-                startThread cd (getResponse s)
+                    priorContract :: (SomeBuiltin, SomeBuiltinState a, Wallet.ContractInstanceId, ContractActivationArgs a)
+                    priorContract = (cd, s, cid, args)
+                pure priorContract
 
-                -- Note: instead of 'getResponse' could be
-                -- `Contract.serialisableState (Proxy @(Builtin a))`
-
-                drainLog
-
-    -- Start the server
+    -- Then, start the server
     fmap (either (error . show) id)
       $ App.runApp ccaStorageBackend (toPABMsg ccaTrace) contractHandler config
       $ do
-          App.AppEnv{App.walletClientEnv} <- Core.askUserEnv @(Builtin a) @(App.AppEnv a)
+          env <- ask @(Core.PABEnvironment (Builtin a) (App.AppEnv a))
+          -- But first, spin up all the previous contracts
+          case previousContracts of
+            -- TODO: Log this error a bit better? Or handle it earlier?
+            Left err -> throwError err
+            Right ts -> do
+                forM_ ts $ \(cd, s, cid, args) -> do
+                  action <- buildPABAction @a @(App.AppEnv a) cd s cid args
+                  liftIO $ Core.runPAB' env action
+                  pure ()
+
+          -- then, actually start the server.
+          let walletClientEnv = App.walletClientEnv (Core.appEnv env)
           (mvar, _) <- PABServer.startServer pabWebserverConfig (Left walletClientEnv) ccaAvailability
           liftIO $ takeMVar mvar
 
@@ -251,34 +265,39 @@ toMockNodeServerLog = LM.convertLog $ LM.PABMsg . LM.SMockserverLogMsg
 drainLog :: Member DelayEffect effs => Eff effs ()
 drainLog = delayThread (1 :: Second)
 
--- | Start a thread for the contract instance
-startThread ::
-    forall effs.
-    SomeBuiltin
-    -> ContractResponse Value Value Value PABReq
-    -> Eff effs ()
-startThread (SomeBuiltin b) r = do
-    let st = reconstructInternalState b r
-    -- TODO: Now, spin up the contracts!
-    pure ()
+-- | Build a PAB Action that will run the provided context with the
+-- reconstructed state.
+buildPABAction ::
+    forall a env effs.
+    ( Member (LogMsg (LM.PABMultiAgentMsg (Builtin a))) effs
+    , Member (Error PABError) effs
+    , LastMember IO effs
+    )
+    => SomeBuiltin
+    -> SomeBuiltinState a
+    -> Wallet.ContractInstanceId
+    -> ContractActivationArgs a
+    -> Eff effs (Core.PABAction (Builtin a) env Wallet.ContractInstanceId)
+buildPABAction (SomeBuiltin contract) someBuiltinState cid ContractActivationArgs{caWallet, caID} = do
+  let r@State.ContractResponse{State.newState=State{record}} = getResponse someBuiltinState
 
-reconstructInternalState ::
-    forall w schema error a.
-    ContractConstraints w schema error =>
-    Contract w schema error a
-  -> ContractResponse Value Value Value PABReq
-  -> Maybe (Emulator.ContractInstanceStateInternal w schema error a)
-reconstructInternalState contract r =
-    foldl' f (Just s0) (responses record)
-  where
-    f mstate t =
-      mstate >>= \state ->
-          case fromJSON (rspResponse (snd <$> t)) of
-            -- TODO: Log the error? Or, just use the `Builtin` functions
-            -- `initBuiltin/updateBuiltin`?
-            Error _          -> Nothing
-            Success response -> Emulator.addEventInstanceState response state
+  -- Reconstruct the internal contract state
+  initialState <- initBuiltin @effs @a cid contract
 
-    State.ContractResponse{State.newState=State{record}} = r
-    s0 :: Emulator.ContractInstanceStateInternal w schema error a
-    s0 = Emulator.emptyInstanceState contract
+  let runUpdate (SomeBuiltinState oldS oldW) n = do
+        case fromJSON (rspResponse (snd <$> n)) of
+          Error e      -> throwError . OtherError $ "Couldn't decode JSON response when reconstruting state: " <> (Text.pack e)
+          Success resp -> do
+            b <- updateBuiltin @effs @a cid oldS oldW resp
+            pure b
+
+  currentState <- foldlM runUpdate initialState (responses record)
+
+  -- And also bring up the STM state
+  stmState :: InstanceState <- liftIO $ STM.atomically emptyInstanceState
+  runReader stmState $ updateState @IO r
+
+  let action = Core.activateContract' @(Builtin a) (ContractInstanceState currentState (pure stmState)) cid caWallet caID
+
+  pure action
+
