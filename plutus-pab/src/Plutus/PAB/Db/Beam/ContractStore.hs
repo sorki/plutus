@@ -4,6 +4,7 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TypeApplications  #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE TypeOperators     #-}
 
@@ -20,6 +21,7 @@ import           Control.Lens
 import           Control.Monad                       (join)
 import           Control.Monad.Freer                 (Eff, Member, type (~>))
 import           Control.Monad.Freer.Error           (Error, throwError)
+import           Control.Monad.Freer.Extras.Log      (LogMsg (..))
 import           Data.Aeson                          (FromJSON, ToJSON, decode, encode)
 import           Data.ByteString.Builder             (toLazyByteString)
 import qualified Data.ByteString.Char8               as B
@@ -33,8 +35,9 @@ import qualified Data.Text.Encoding                  as Text
 import           Data.UUID                           (fromText, toText)
 import           Database.Beam                       hiding (updateRow)
 import           Plutus.PAB.Effects.Contract         (ContractStore (..), PABContract (..))
-import           Plutus.PAB.Effects.Contract.Builtin (Builtin, fromResponse, getResponse)
+import           Plutus.PAB.Effects.Contract.Builtin (Builtin, HasDefinitions (..), fromResponse, getResponse)
 import           Plutus.PAB.Effects.DbStore          hiding (ContractInstanceId)
+import           Plutus.PAB.Monitoring.PABLogMsg     (PABMultiAgentMsg (..))
 import           Plutus.PAB.Types                    (PABError (..))
 import           Plutus.PAB.Webserver.Types          (ContractActivationArgs (..))
 import           Wallet.Emulator.Wallet              (Wallet (..))
@@ -94,6 +97,8 @@ handleContractStore ::
   , Member (Error PABError) effs
   , ToJSON a
   , FromJSON a
+  , HasDefinitions a
+  , Member (LogMsg (PABMultiAgentMsg (Builtin a))) effs
   )
   => ContractStore (Builtin a)
   ~> Eff effs
@@ -110,14 +115,21 @@ handleContractStore = \case
             (\ci -> ci ^. contractInstanceId ==. val_ (uuidStr instanceId))
 
   GetState instanceId -> do
-    -- TODO: https://jira.iohk.io/browse/SCP-2126
     let decodeText = decode . toLazyByteString . encodeUtf8Builder
         extractState = \case
           Nothing -> throwError $ ContractInstanceNotFound instanceId
           Just  c ->
-            maybe (throwError $ ContractStateNotFound instanceId)
-                  pure
-                  (_contractInstanceState c >>= decodeText >>= fromResponse)
+            do
+              caID <- maybe (throwError $ AesonDecodingError "Couldn't this JSON decode as `a`" (_contractInstanceId c))
+                        pure
+                        (decode . toLazyByteString . encodeUtf8Builder $ _contractInstanceContractId c)
+
+              resp <- maybe (throwError $ ContractStateNotFound instanceId)
+                        pure
+                        (_contractInstanceState c >>= decodeText)
+
+              let cd = getContract @a caID
+              fromResponse @a instanceId cd resp
 
     join
       $ fmap extractState

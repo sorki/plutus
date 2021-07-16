@@ -42,11 +42,12 @@ module Plutus.PAB.Effects.Contract.Builtin(
 import           Control.Monad.Freer
 import           Control.Monad.Freer.Error                        (Error, throwError)
 import           Control.Monad.Freer.Extras.Log                   (LogMsg (..), logDebug)
-import           Data.Aeson                                       (FromJSON, ToJSON, Value)
+import           Data.Aeson                                       (FromJSON, Result (..), ToJSON, Value, fromJSON)
 import qualified Data.Aeson                                       as JSON
 import           Data.Bifunctor                                   (Bifunctor (first))
-import           Data.Foldable                                    (traverse_)
+import           Data.Foldable                                    (foldlM, traverse_)
 import           Data.Row
+import qualified Data.Text                                        as Text
 
 import           Plutus.Contract.Effects                          (PABReq, PABResp)
 import           Plutus.Contract.Types                            (ResumableResult (..), SuspendedContract (..))
@@ -58,9 +59,9 @@ import           GHC.Generics                                     (Generic)
 import           Playground.Schema                                (endpointsToSchemas)
 import           Playground.Types                                 (FunctionSchema)
 import           Plutus.Contract                                  (Contract, ContractInstanceId, EmptySchema)
-import           Plutus.Contract.Resumable                        (Response)
+import           Plutus.Contract.Resumable                        (Response, responses, rspResponse)
 import           Plutus.Contract.Schema                           (Input, Output)
-import           Plutus.Contract.State                            (ContractResponse (..))
+import           Plutus.Contract.State                            (ContractResponse (..), State (..))
 import qualified Plutus.Contract.State                            as ContractState
 import           Plutus.PAB.Core.ContractInstance.RequestHandlers (ContractInstanceMsg (ContractLog, ProcessFirstInboxMessage))
 import           Plutus.Trace.Emulator.Types                      (ContractInstanceStateInternal (..))
@@ -135,22 +136,29 @@ getResponse (SomeBuiltinState s w) =
     $ Emulator.instContractState
     $ Emulator.toInstanceState s
 
--- | TODO: Replay from the ContractResponse the state of 'Builtin a' using 'Emulator.emptyInstanceState' and 'Emulator.addEventInstanceState'.
-fromResponse :: forall a. ContractResponse Value Value Value PABReq -> Maybe (SomeBuiltinState a)
-fromResponse _ = do
-    -- let toPABResp = \x -> JSON.fromJSON x :: Result PABResp
-    -- let resp' = fmap (toPABResp . snd) <$> responses (record $ newState resp)
-    -- w <- case JSON.fromJSON lastState of
-    --        Error _ -> Nothing
-    --        Success w -> pure w
-    -- pure $ SomeBuiltinState undefined w
-    pure undefined
- -- where
- --     toPABResp :: Value -> Maybe PABResp
- --     toPABResp v =
- --         case JSON.fromJSON v of
- --           Success v' -> Just v'
- --           Error _ -> Nothing
+-- | Reconstruct a state from a serialised response by replaying back the
+-- actions.
+fromResponse :: forall a effs.
+  ( Member (LogMsg (PABMultiAgentMsg (Builtin a))) effs
+  , Member (Error PABError) effs
+  )
+  => ContractInstanceId
+  -> SomeBuiltin
+  -> ContractResponse Value Value Value PABReq
+  -> Eff effs (SomeBuiltinState a)
+fromResponse cid (SomeBuiltin contract) ContractResponse{newState=State{record}} = do
+  initialState <- initBuiltin @effs @a cid contract
+
+  let runUpdate (SomeBuiltinState oldS oldW) n = do
+        case fromJSON (rspResponse (snd <$> n)) of
+          Error e      -> throwError . OtherError $ "Couldn't decode JSON response when reconstruting state: " <> (Text.pack e)
+          Success resp -> do
+            b <- updateBuiltin @effs @a cid oldS oldW resp
+            pure b
+
+  currentState <- foldlM runUpdate initialState (responses record)
+
+  pure currentState
 
 initBuiltin ::
     forall effs a w schema error b.

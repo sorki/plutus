@@ -36,21 +36,20 @@ import qualified Control.Concurrent.STM               as STM
 import           Control.Monad                        (forM, forM_, void)
 import           Control.Monad.Freer                  (Eff, LastMember, Member, interpret)
 import           Control.Monad.Freer.Delay            (DelayEffect, delayThread)
-import           Control.Monad.Freer.Error            (Error, throwError)
-import           Control.Monad.Freer.Extras.Log       (LogMsg (..), logInfo)
+import           Control.Monad.Freer.Error            (throwError)
+import           Control.Monad.Freer.Extras.Log       (logInfo)
 import           Control.Monad.Freer.Reader           (ask, runReader)
 import           Control.Monad.IO.Class               (liftIO)
-import           Data.Aeson                           (FromJSON, Result (..), ToJSON, fromJSON)
-import           Data.Foldable                        (foldlM, traverse_)
+import           Data.Aeson                           (FromJSON, ToJSON)
+import           Data.Foldable                        (traverse_)
 import qualified Data.Map                             as Map
 import           Data.Proxy                           (Proxy (..))
 import qualified Data.Set                             as Set
 import qualified Data.Text                            as Text
 import           Data.Time.Units                      (Second)
 import           Data.Typeable                        (Typeable)
-import           Plutus.Contract                      (Contract)
-import           Plutus.Contract.Resumable            (responses, rspResponse)
-import           Plutus.Contract.State                (ContractResponse, State (..))
+import           Plutus.Contract.Resumable            (responses)
+import           Plutus.Contract.State                (State (..))
 import qualified Plutus.Contract.State                as State
 import qualified Plutus.PAB.App                       as App
 import qualified Plutus.PAB.Core                      as Core
@@ -58,12 +57,12 @@ import           Plutus.PAB.Core.ContractInstance     (ContractInstanceState (..
 import           Plutus.PAB.Core.ContractInstance.STM (InstanceState, emptyInstanceState)
 import qualified Plutus.PAB.Db.Beam                   as Beam
 import qualified Plutus.PAB.Effects.Contract          as Contract
-import           Plutus.PAB.Effects.Contract.Builtin  (Builtin, BuiltinHandler, HasDefinitions (..), SomeBuiltin (..),
-                                                       SomeBuiltinState (..), getResponse, initBuiltin, updateBuiltin)
+import           Plutus.PAB.Effects.Contract.Builtin  (Builtin, BuiltinHandler, HasDefinitions (..),
+                                                       SomeBuiltinState (..), getResponse)
 import qualified Plutus.PAB.Monitoring.Monitoring     as LM
 import           Plutus.PAB.Run.Command
 import qualified Plutus.PAB.Run.PSGenerator           as PSGenerator
-import           Plutus.PAB.Types                     (Config (..), DbConfig (..), PABError (..), chainIndexConfig,
+import           Plutus.PAB.Types                     (Config (..), DbConfig (..), chainIndexConfig,
                                                        metadataServerConfig, nodeServerConfig, walletServerConfig)
 import qualified Plutus.PAB.Webserver.Server          as PABServer
 import           Plutus.PAB.Webserver.Types           (ContractActivationArgs (..))
@@ -152,9 +151,8 @@ runConfigCommand contractHandler ConfigCommandArgs{ccaTrace, ccaPABConfig=config
             cIds   <- Map.toList <$> Contract.getActiveContracts @(Builtin a)
             forM cIds $ \(cid, args) -> do
                 s <- Contract.getState @(Builtin a) cid
-                let cd = getContract @a (caID args)
-                    priorContract :: (SomeBuiltin, SomeBuiltinState a, Wallet.ContractInstanceId, ContractActivationArgs a)
-                    priorContract = (cd, s, cid, args)
+                let priorContract :: (SomeBuiltinState a, Wallet.ContractInstanceId, ContractActivationArgs a)
+                    priorContract = (s, cid, args)
                 pure priorContract
 
     -- Then, start the server
@@ -167,8 +165,8 @@ runConfigCommand contractHandler ConfigCommandArgs{ccaTrace, ccaPABConfig=config
             -- TODO: Log this error a bit better? Or handle it earlier?
             Left err -> throwError err
             Right ts -> do
-                forM_ ts $ \(cd, s, cid, args) -> do
-                  action <- buildPABAction @a @(App.AppEnv a) cd s cid args
+                forM_ ts $ \(s, cid, args) -> do
+                  action <- buildPABAction @a @(App.AppEnv a) s cid args
                   liftIO $ Core.runPAB' env action
                   pure ()
 
@@ -268,34 +266,20 @@ drainLog = delayThread (1 :: Second)
 -- reconstructed state.
 buildPABAction ::
     forall a env effs.
-    ( Member (LogMsg (LM.PABMultiAgentMsg (Builtin a))) effs
-    , Member (Error PABError) effs
-    , LastMember IO effs
+    ( LastMember IO effs
     )
-    => SomeBuiltin
-    -> SomeBuiltinState a
+    => SomeBuiltinState a
     -> Wallet.ContractInstanceId
     -> ContractActivationArgs a
     -> Eff effs (Core.PABAction (Builtin a) env Wallet.ContractInstanceId)
-buildPABAction (SomeBuiltin contract) someBuiltinState cid ContractActivationArgs{caWallet, caID} = do
-  let r@State.ContractResponse{State.newState=State{record}} = getResponse someBuiltinState
+buildPABAction currentState cid ContractActivationArgs{caWallet, caID} = do
+  let r = getResponse currentState
 
-  -- Reconstruct the internal contract state
-  initialState <- initBuiltin @effs @a cid contract
-
-  let runUpdate (SomeBuiltinState oldS oldW) n = do
-        case fromJSON (rspResponse (snd <$> n)) of
-          Error e      -> throwError . OtherError $ "Couldn't decode JSON response when reconstruting state: " <> (Text.pack e)
-          Success resp -> do
-            b <- updateBuiltin @effs @a cid oldS oldW resp
-            pure b
-
-  currentState <- foldlM runUpdate initialState (responses record)
-
-  -- And also bring up the STM state
+  -- Bring up the STM state
   stmState :: InstanceState <- liftIO $ STM.atomically emptyInstanceState
   runReader stmState $ updateState @IO r
 
+  -- Squish it into a PAB action which we will run
   let action = Core.activateContract' @(Builtin a) (ContractInstanceState currentState (pure stmState)) cid caWallet caID
 
   pure action
