@@ -30,6 +30,7 @@ import           GHC.Generics                        (Generic)
 import qualified ContractExample.AtomicSwap          as Contracts.AtomicSwap
 import qualified ContractExample.PayToWallet         as Contracts.PayToWallet
 import           Data.Text.Extras                    (tshow)
+import           Playground.Types                    (FunctionSchema)
 import qualified Plutus.Contracts.Currency           as Contracts.Currency
 import qualified Plutus.Contracts.GameStateMachine   as Contracts.GameStateMachine
 import qualified Plutus.Contracts.PingPong           as Contracts.PingPong
@@ -38,6 +39,7 @@ import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler, H
 import qualified Plutus.PAB.Effects.Contract.Builtin as Builtin
 import           Plutus.PAB.Monitoring.PABLogMsg     (PABMultiAgentMsg)
 import           Plutus.PAB.Types                    (PABError (..))
+import           Schema                              (FormSchema)
 
 data TestContracts = GameStateMachine | Currency | AtomicSwap | PayToWallet | PingPong
     deriving (Eq, Ord, Show, Generic)

@@ -92,9 +92,6 @@ getExampleContractsSchema = \case
     PrismUnlockSto      -> Builtin.endpointsToSchemas @Contracts.Prism.STOSubscriberSchema
     WaitForTx           -> Builtin.endpointsToSchemas @Contracts.WaitForTx.WaitForTxSchema
 
-handleContractExample :: BuiltinHandler ExampleContracts
-handleContractExample = Builtin.handleBuiltin
-
 getExampleContracts :: ExampleContracts -> SomeBuiltin
 getExampleContracts = \case
     UniswapInit         -> SomeBuiltin Contracts.Uniswap.setupTokens

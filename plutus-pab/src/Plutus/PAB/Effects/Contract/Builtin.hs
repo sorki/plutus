@@ -24,7 +24,6 @@ module Plutus.PAB.Effects.Contract.Builtin(
     , ContractConstraints
     , SomeBuiltin(..)
     , SomeBuiltinState(..)
-    , BuiltinContract(..)
     , BuiltinHandler(..)
     , handleBuiltin
     -- * Extracting schemas from contracts

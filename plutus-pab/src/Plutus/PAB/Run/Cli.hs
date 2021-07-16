@@ -29,9 +29,6 @@ import qualified Cardano.Node.Server                  as NodeServer
 import           Cardano.Node.Types                   (MockServerConfig (..))
 import qualified Cardano.Wallet.Server                as WalletServer
 import           Cardano.Wallet.Types
-import           Data.Typeable                       (Typeable)
-import           Plutus.Contract                     (Contract)
-import           Plutus.Contract.State               (ContractResponse, State (..))
 import           Control.Concurrent                   (takeMVar)
 import           Control.Concurrent.Async             (Async, async, waitAny)
 import           Control.Concurrent.Availability      (Availability, starting)
@@ -50,8 +47,10 @@ import           Data.Proxy                           (Proxy (..))
 import qualified Data.Set                             as Set
 import qualified Data.Text                            as Text
 import           Data.Time.Units                      (Second)
+import           Data.Typeable                        (Typeable)
+import           Plutus.Contract                      (Contract)
 import           Plutus.Contract.Resumable            (responses, rspResponse)
-import           Plutus.Contract.State                (State (..))
+import           Plutus.Contract.State                (ContractResponse, State (..))
 import qualified Plutus.Contract.State                as State
 import qualified Plutus.PAB.App                       as App
 import qualified Plutus.PAB.Core                      as Core
@@ -59,7 +58,7 @@ import           Plutus.PAB.Core.ContractInstance     (ContractInstanceState (..
 import           Plutus.PAB.Core.ContractInstance.STM (InstanceState, emptyInstanceState)
 import qualified Plutus.PAB.Db.Beam                   as Beam
 import qualified Plutus.PAB.Effects.Contract          as Contract
-import           Plutus.PAB.Effects.Contract.Builtin  (Builtin, HasDefinitions, BuiltinHandler, SomeBuiltin (..),
+import           Plutus.PAB.Effects.Contract.Builtin  (Builtin, BuiltinHandler, HasDefinitions (..), SomeBuiltin (..),
                                                        SomeBuiltinState (..), getResponse, initBuiltin, updateBuiltin)
 import qualified Plutus.PAB.Monitoring.Monitoring     as LM
 import           Plutus.PAB.Run.Command
@@ -153,7 +152,7 @@ runConfigCommand contractHandler ConfigCommandArgs{ccaTrace, ccaPABConfig=config
             cIds   <- Map.toList <$> Contract.getActiveContracts @(Builtin a)
             forM cIds $ \(cid, args) -> do
                 s <- Contract.getState @(Builtin a) cid
-                let cd = contractDefinition @a (caID args)
+                let cd = getContract @a (caID args)
                     priorContract :: (SomeBuiltin, SomeBuiltinState a, Wallet.ContractInstanceId, ContractActivationArgs a)
                     priorContract = (cd, s, cid, args)
                 pure priorContract

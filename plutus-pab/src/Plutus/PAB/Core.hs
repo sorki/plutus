@@ -203,9 +203,9 @@ runPAB' ::
     -> PABAction t env a
     -> IO (Either PABError a)
 runPAB' env@PABEnvironment{effectHandlers} action = runM $ runError $ do
-    let EffectHandlers{onStartup, onShutdown, handleLogMessages, handleContractStoreEffect, handleContractEffect} = effectHandlers
+    let EffectHandlers{onStartup, onShutdown, handleLogMessages, handleContractStoreEffect, handleContractEffect, handleContractDefinitionEffect} = effectHandlers
 
-    runReader env $ interpret (handleTimeEffect @t @env) $ handleLogMessages $ handleContractEffect $ handleContractStoreEffect $ do
+    runReader env $ interpret (handleTimeEffect @t @env) $ handleLogMessages $ handleContractDefinitionEffect $ handleContractEffect $ handleContractStoreEffect $ do
         onStartup
         result <- action
         onShutdown
