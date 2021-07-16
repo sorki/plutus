@@ -9,30 +9,36 @@ import Data.Map (toUnfoldable) as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
+import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
-import Halogen.HTML (HTML, a, button, div, div_, h2, h3, h4, img, label, li, p, p_, span, span_, text, ul, ul_)
+import Halogen.HTML (HTML, ComponentHTML, a, button, div, div_, h2, h3, h4, img, label, li, p, p_, span, span_, text, ul, ul_)
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Properties (enabled, for, src)
+import Halogen.HTML.Properties (enabled, for, id_, src)
 import Humanize (humanizeValue)
 import Images (cfdIcon, loanIcon, purchaseIcon)
 import InputField.Lenses (_value)
 import InputField.Types (State) as InputField
 import InputField.View (renderInput)
+import MainFrame.Types (ChildSlots)
 import Marlowe.Extended (ContractType(..))
 import Marlowe.Extended.Metadata (ContractTemplate, MetaData, NumberFormat(..), _contractName, _metaData, _slotParameterDescriptions, _valueParameterDescription, _valueParameterFormat, _valueParameterInfo)
 import Marlowe.Market (contractTemplates)
 import Marlowe.PAB (contractCreationFee)
 import Marlowe.Semantics (Assets, TokenName)
-import Material.Icons (Icon(..), icon, icon_)
+import Material.Icons (Icon(..)) as Icon
+import Material.Icons (Icon, icon, icon_)
+import Popper (Placement(..))
 import Template.Format (formatText)
 import Template.Lenses (_contractNicknameInput, _contractSetupStage, _contractTemplate, _roleWalletInputs, _slotContentInputs, _valueContentInputs)
 import Template.State (templateSetupIsValid)
 import Template.Types (Action(..), ContractSetupStage(..), RoleError, SlotError, State, ValueError)
+import Tooltip.State (tooltip)
+import Tooltip.Types (ReferenceId(..))
 import WalletData.Lenses (_walletNickname)
 import WalletData.State (adaToken, getAda)
 import WalletData.Types (WalletLibrary)
 
-contractTemplateCard :: forall p. WalletLibrary -> Assets -> State -> HTML p Action
+contractTemplateCard :: forall m. MonadAff m => WalletLibrary -> Assets -> State -> ComponentHTML Action ChildSlots m
 contractTemplateCard walletLibrary assets state =
   let
     contractSetupStage = view _contractSetupStage state
@@ -45,11 +51,11 @@ contractTemplateCard walletLibrary assets state =
           [ classNames Css.cardHeader ]
           [ text "Contract templates" ]
       , contractTemplateBreadcrumb contractSetupStage contractTemplate
-      , div [] case contractSetupStage of
-          Start -> [ contractSelection ]
-          Overview -> [ contractOverview contractTemplate ]
-          Setup -> [ contractSetup walletLibrary state ]
-          Review -> [ contractReview assets state ]
+      , case contractSetupStage of
+          Start -> contractSelection
+          Overview -> contractOverview contractTemplate
+          Setup -> contractSetup walletLibrary state
+          Review -> contractReview assets state
       ]
 
 ------------------------------------------------------------
@@ -92,7 +98,7 @@ contractTemplateBreadcrumb contractSetupStage contractTemplate =
       ]
       [ text itemText ]
 
-  arrow = span [ classNames [ "mt-2" ] ] [ icon_ Next ]
+  arrow = span [ classNames [ "mt-2" ] ] [ icon_ Icon.Next ]
 
 contractSelection :: forall p. HTML p Action
 contractSelection =
@@ -123,7 +129,7 @@ contractSelection =
               [ classNames [ "font-xs" ] ]
               $ formatText contractTemplate.metaData.contractDescription
           ]
-      , icon_ Next
+      , icon_ Icon.Next
       ]
 
 contractOverview :: forall p. ContractTemplate -> HTML p Action
@@ -147,14 +153,14 @@ contractOverview contractTemplate =
             ]
             [ text "Back" ]
         , button
-            [ classNames $ Css.primaryButton <> [ "flex-1", "text-left" ] <> Css.withIcon ArrowRight
+            [ classNames $ Css.primaryButton <> [ "flex-1", "text-left" ] <> Css.withIcon Icon.ArrowRight
             , onClick_ $ SetContractSetupStage Setup
             ]
             [ text "Setup" ]
         ]
     ]
 
-contractSetup :: forall p. WalletLibrary -> State -> HTML p Action
+contractSetup :: forall m. MonadAff m => WalletLibrary -> State -> ComponentHTML Action ChildSlots m
 contractSetup walletLibrary state =
   let
     metaData = view (_contractTemplate <<< _metaData) state
@@ -203,7 +209,7 @@ contractSetup walletLibrary state =
               ]
               [ text "Back" ]
           , button
-              [ classNames $ Css.primaryButton <> [ "flex-1", "text-left" ] <> Css.withIcon ArrowRight
+              [ classNames $ Css.primaryButton <> [ "flex-1", "text-left" ] <> Css.withIcon Icon.ArrowRight
               , onClick_ $ SetContractSetupStage Review
               , enabled $ templateSetupIsValid state
               ]
@@ -228,7 +234,7 @@ contractReview assets state =
           [ classNames [ "rounded", "shadow" ] ]
           [ h3
               [ classNames [ "flex", "gap-1", "items-center", "leading-none", "text-sm", "font-semibold", "p-2", "mb-2", "border-gray", "border-b" ] ]
-              [ icon Terms [ "text-purple" ]
+              [ icon Icon.Terms [ "text-purple" ]
               , text "Terms"
               ]
           , div
@@ -329,9 +335,9 @@ parameter label description value =
 -- At the moment, this is a good thing: we don't have a design for them, and we only use a `PK` party in one
 -- special case, where it is read-only and would be confusing to show the user anyway. But if we ever need to
 -- use `PK` inputs properly (and make them editable) we will have to rethink this.
-roleInputs :: forall p. WalletLibrary -> MetaData -> Map TokenName (InputField.State RoleError) -> HTML p Action
+roleInputs :: forall m. MonadAff m => WalletLibrary -> MetaData -> Map TokenName (InputField.State RoleError) -> ComponentHTML Action ChildSlots m
 roleInputs walletLibrary metaData roleWalletInputs =
-  templateInputsSection Roles "Roles"
+  templateInputsSection Icon.Roles "Roles"
     [ ul_ $ roleInput <$> Map.toUnfoldable roleWalletInputs ]
   where
   roleInput (tokenName /\ roleWalletInput) =
@@ -345,8 +351,10 @@ roleInputs walletLibrary metaData roleWalletInputs =
             , button
                 [ classNames [ "absolute", "top-4", "right-4" ]
                 , onClick_ $ OpenCreateWalletCard tokenName
+                , id_ $ "newContactForRole" <> tokenName
                 ]
-                [ icon_ AddCircle ]
+                [ icon Icon.NewContact [ "text-purple" ] ]
+            , tooltip "Create a new contact for this role" (RefId $ "newContactForRole" <> tokenName) Left
             ]
         ]
 
@@ -361,7 +369,7 @@ roleInputs walletLibrary metaData roleWalletInputs =
 
 parameterInputs :: forall p. MetaData -> Map String (InputField.State SlotError) -> Map String (InputField.State ValueError) -> HTML p Action
 parameterInputs metaData slotContentInputs valueContentInputs =
-  templateInputsSection Terms "Terms"
+  templateInputsSection Icon.Terms "Terms"
     [ ul
         [ classNames [ "mb-4" ] ]
         $ valueInput
